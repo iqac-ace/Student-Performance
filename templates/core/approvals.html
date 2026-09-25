@@ -1,0 +1,640 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+
+<div class="mb-4">
+    <h2>Authorization Queue</h2>
+
+    <p class="text-muted">
+        Review student academic records and uploaded progress evidence.
+    </p>
+</div>
+
+
+<!-- ============================== -->
+<!-- STUDENT PROGRESS / ACTIVITIES -->
+<!-- ============================== -->
+
+<div class="card border-0 shadow-sm mb-4">
+
+    <div class="card-header bg-white">
+        <h5 class="mb-0">
+            Student Progress & Evidence
+        </h5>
+    </div>
+
+
+    <div class="table-responsive">
+
+        <table class="table table-hover align-middle mb-0">
+
+            <thead class="table-light">
+
+                <tr>
+                    <th>Student</th>
+                    <th>Department</th>
+                    <th>Framework Parameter</th>
+                    <th>Activity</th>
+                    <th>Evidence</th>
+                    <th>Current Points</th>
+                    <th>Status</th>
+                    <th style="min-width:300px;">
+                        Verification
+                    </th>
+                </tr>
+
+            </thead>
+
+
+            <tbody>
+
+            {% for a in activities %}
+
+                <tr>
+
+                    <td>
+
+                        <strong>
+                            {{ a.student.register_number }}
+                        </strong>
+
+                        <br>
+
+                        {{ a.student.name }}
+
+                    </td>
+
+
+                    <td>
+                        {{ a.student.department.code }}
+                    </td>
+
+
+                    <td>
+
+                        {{ a.parameter.category_code }}
+
+                        -
+
+                        {{ a.parameter.name }}
+
+                        <br>
+
+                        <small class="text-muted">
+                            Maximum:
+                            {{ a.parameter.max_points }} points
+                        </small>
+
+                    </td>
+
+
+                    <td>
+
+                        {{ a.title }}
+
+                        {% if a.remarks %}
+
+                        <br>
+
+                        <small class="text-muted">
+                            {{ a.remarks }}
+                        </small>
+
+                        {% endif %}
+
+                    </td>
+
+
+                    <td>
+
+                        {% if a.evidence %}
+
+                        <a
+                            href="{{ a.evidence.url }}"
+                            target="_blank"
+                            class="btn btn-sm btn-outline-primary"
+                        >
+                            View File
+                        </a>
+
+                        {% else %}
+
+                        <span class="text-muted">
+                            No file
+                        </span>
+
+                        {% endif %}
+
+                    </td>
+
+
+                    <td>
+
+                        <strong>
+                            {{ a.points|default:"0" }}
+                        </strong>
+
+                    </td>
+
+
+                    <td>
+
+                        {{ a.get_status_display }}
+
+                    </td>
+
+
+                    <td>
+
+
+                        <!-- ==================== -->
+                        <!-- HOD VERIFICATION -->
+                        <!-- ==================== -->
+
+                        {% if request.user.profile.role == 'HOD' and a.status == 'PENDING' %}
+
+                        <form
+                            method="post"
+                            action="{% url 'approve' 'activity' a.id 'approve' %}"
+                            class="mb-2"
+                        >
+
+                            {% csrf_token %}
+
+
+                            <label class="form-label small">
+                                Verified Performance Level
+                            </label>
+
+
+                            <select
+                                name="level"
+                                class="form-select form-select-sm mb-2"
+                                required
+                            >
+
+                                <option value="">
+                                    Select Level
+                                </option>
+
+                                <option value="4">
+                                    4 - Outstanding
+                                </option>
+
+                                <option value="3">
+                                    3 - Proficient
+                                </option>
+
+                                <option value="2">
+                                    2 - Developing
+                                </option>
+
+                                <option value="1">
+                                    1 - Beginning
+                                </option>
+
+                                <option value="0">
+                                    0 - Not Demonstrated
+                                </option>
+
+                            </select>
+
+
+                            <button
+                                type="submit"
+                                class="btn btn-success btn-sm"
+                            >
+                                Verify & Add Score
+                            </button>
+
+                        </form>
+
+
+                        <form
+                            method="post"
+                            action="{% url 'approve' 'activity' a.id 'reject' %}"
+                        >
+
+                            {% csrf_token %}
+
+                            <button
+                                type="submit"
+                                class="btn btn-outline-danger btn-sm"
+                            >
+                                Reject
+                            </button>
+
+                        </form>
+
+                        {% endif %}
+
+
+
+                        <!-- ==================== -->
+                        <!-- IQAC FINAL APPROVAL -->
+                        <!-- ==================== -->
+
+                        {% if request.user.is_superuser or request.user.profile.role == 'IQAC' %}
+
+                            {% if a.status == 'HOD_APPROVED' %}
+
+                            <form
+                                method="post"
+                                action="{% url 'approve' 'activity' a.id 'approve' %}"
+                                class="d-inline"
+                            >
+
+                                {% csrf_token %}
+
+                                <button
+                                    type="submit"
+                                    class="btn btn-success btn-sm"
+                                >
+                                    IQAC Approve
+                                </button>
+
+                            </form>
+
+
+                            <form
+                                method="post"
+                                action="{% url 'approve' 'activity' a.id 'reject' %}"
+                                class="d-inline"
+                            >
+
+                                {% csrf_token %}
+
+                                <button
+                                    type="submit"
+                                    class="btn btn-outline-danger btn-sm"
+                                >
+                                    Reject
+                                </button>
+
+                            </form>
+
+                            {% endif %}
+
+                        {% endif %}
+
+
+                    </td>
+
+                </tr>
+
+
+            {% empty %}
+
+                <tr>
+
+                    <td
+                        colspan="8"
+                        class="text-center text-muted py-4"
+                    >
+                        No student progress records waiting for verification.
+                    </td>
+
+                </tr>
+
+            {% endfor %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+
+
+<!-- ============================== -->
+<!-- SEMESTER RESULTS -->
+<!-- ============================== -->
+
+<div class="card border-0 shadow-sm mb-4">
+
+    <div class="card-header bg-white">
+
+        <h5 class="mb-0">
+            Semester Result Approvals
+        </h5>
+
+    </div>
+
+
+    <div class="table-responsive">
+
+        <table class="table table-hover align-middle mb-0">
+
+            <thead class="table-light">
+
+                <tr>
+                    <th>Student</th>
+                    <th>Semester</th>
+                    <th>SGPA</th>
+                    <th>CGPA</th>
+                    <th>Arrears</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+
+            </thead>
+
+
+            <tbody>
+
+            {% for s in semesters %}
+
+                <tr>
+
+                    <td>
+                        {{ s.student.register_number }}
+                        -
+                        {{ s.student.name }}
+                    </td>
+
+                    <td>
+                        {{ s.semester }}
+                    </td>
+
+                    <td>
+                        {{ s.sgpa }}
+                    </td>
+
+                    <td>
+                        {{ s.cgpa }}
+                    </td>
+
+                    <td>
+                        {{ s.arrears }}
+                    </td>
+
+                    <td>
+                        {{ s.get_status_display }}
+                    </td>
+
+                    <td>
+
+                        {% if request.user.profile.role == 'HOD' and s.status == 'PENDING' %}
+
+                        <form
+                            method="post"
+                            action="{% url 'approve' 'semester' s.id 'approve' %}"
+                            class="d-inline"
+                        >
+
+                            {% csrf_token %}
+
+                            <button
+                                class="btn btn-success btn-sm"
+                                type="submit"
+                            >
+                                Approve
+                            </button>
+
+                        </form>
+
+
+                        <form
+                            method="post"
+                            action="{% url 'approve' 'semester' s.id 'reject' %}"
+                            class="d-inline"
+                        >
+
+                            {% csrf_token %}
+
+                            <button
+                                class="btn btn-outline-danger btn-sm"
+                                type="submit"
+                            >
+                                Reject
+                            </button>
+
+                        </form>
+
+                        {% endif %}
+
+
+                        {% if request.user.is_superuser or request.user.profile.role == 'IQAC' %}
+
+                            {% if s.status == 'HOD_APPROVED' %}
+
+                            <form
+                                method="post"
+                                action="{% url 'approve' 'semester' s.id 'approve' %}"
+                                class="d-inline"
+                            >
+
+                                {% csrf_token %}
+
+                                <button
+                                    class="btn btn-success btn-sm"
+                                    type="submit"
+                                >
+                                    IQAC Approve
+                                </button>
+
+                            </form>
+
+                            {% endif %}
+
+                        {% endif %}
+
+                    </td>
+
+                </tr>
+
+
+            {% empty %}
+
+                <tr>
+
+                    <td
+                        colspan="7"
+                        class="text-center text-muted py-4"
+                    >
+                        No semester results awaiting approval.
+                    </td>
+
+                </tr>
+
+            {% endfor %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+
+
+<!-- ============================== -->
+<!-- SUBJECT MARKS -->
+<!-- ============================== -->
+
+<div class="card border-0 shadow-sm">
+
+    <div class="card-header bg-white">
+
+        <h5 class="mb-0">
+            Subject Marks Approvals
+        </h5>
+
+    </div>
+
+
+    <div class="table-responsive">
+
+        <table class="table table-hover align-middle mb-0">
+
+            <thead class="table-light">
+
+                <tr>
+                    <th>Student</th>
+                    <th>Subject</th>
+                    <th>Internal</th>
+                    <th>External</th>
+                    <th>Total</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+
+            </thead>
+
+
+            <tbody>
+
+            {% for m in marks %}
+
+                <tr>
+
+                    <td>
+                        {{ m.student.register_number }}
+                        -
+                        {{ m.student.name }}
+                    </td>
+
+                    <td>
+                        {{ m.subject.code }}
+                        -
+                        {{ m.subject.name }}
+                    </td>
+
+                    <td>
+                        {{ m.internal }}
+                    </td>
+
+                    <td>
+                        {{ m.external }}
+                    </td>
+
+                    <td>
+                        {{ m.total }}
+                    </td>
+
+                    <td>
+                        {{ m.get_status_display }}
+                    </td>
+
+                    <td>
+
+
+                        {% if request.user.profile.role == 'HOD' and m.status == 'PENDING' %}
+
+                        <form
+                            method="post"
+                            action="{% url 'approve' 'mark' m.id 'approve' %}"
+                            class="d-inline"
+                        >
+
+                            {% csrf_token %}
+
+                            <button
+                                class="btn btn-success btn-sm"
+                                type="submit"
+                            >
+                                Approve
+                            </button>
+
+                        </form>
+
+
+                        <form
+                            method="post"
+                            action="{% url 'approve' 'mark' m.id 'reject' %}"
+                            class="d-inline"
+                        >
+
+                            {% csrf_token %}
+
+                            <button
+                                class="btn btn-outline-danger btn-sm"
+                                type="submit"
+                            >
+                                Reject
+                            </button>
+
+                        </form>
+
+                        {% endif %}
+
+
+                        {% if request.user.is_superuser or request.user.profile.role == 'IQAC' %}
+
+                            {% if m.status == 'HOD_APPROVED' %}
+
+                            <form
+                                method="post"
+                                action="{% url 'approve' 'mark' m.id 'approve' %}"
+                                class="d-inline"
+                            >
+
+                                {% csrf_token %}
+
+                                <button
+                                    class="btn btn-success btn-sm"
+                                    type="submit"
+                                >
+                                    IQAC Approve
+                                </button>
+
+                            </form>
+
+                            {% endif %}
+
+                        {% endif %}
+
+
+                    </td>
+
+                </tr>
+
+
+            {% empty %}
+
+                <tr>
+
+                    <td
+                        colspan="7"
+                        class="text-center text-muted py-4"
+                    >
+                        No subject marks awaiting approval.
+                    </td>
+
+                </tr>
+
+            {% endfor %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+
+{% endblock %}

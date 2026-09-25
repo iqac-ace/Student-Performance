@@ -1,0 +1,429 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+
+    <div>
+
+        <h2 class="mb-1">
+            Marks Upload Results
+        </h2>
+
+        <div class="text-muted">
+
+            {{ batch.file_name }}
+
+            • Uploaded by
+            {{ batch.uploaded_by.username }}
+
+            • {{ batch.uploaded_at|date:"d M Y, h:i A" }}
+
+        </div>
+
+    </div>
+
+
+    <div>
+
+        <a
+            href="{% url 'marks_upload' %}"
+            class="btn btn-primary"
+        >
+            Upload Another File
+        </a>
+
+    </div>
+
+</div>
+
+
+
+<!-- SUMMARY CARDS -->
+
+<div class="row g-3 mb-4">
+
+    <div class="col-md-3">
+
+        <div class="card border-0 shadow-sm h-100">
+
+            <div class="card-body">
+
+                <div class="text-muted">
+                    Total Rows
+                </div>
+
+                <div class="display-6 fw-bold">
+                    {{ batch.total_rows }}
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="col-md-3">
+
+        <div class="card border-0 shadow-sm h-100">
+
+            <div class="card-body">
+
+                <div class="text-muted">
+                    Successfully Imported
+                </div>
+
+                <div class="display-6 fw-bold text-success">
+                    {{ batch.success_rows }}
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="col-md-3">
+
+        <div class="card border-0 shadow-sm h-100">
+
+            <div class="card-body">
+
+                <div class="text-muted">
+                    Failed Rows
+                </div>
+
+                <div class="display-6 fw-bold text-danger">
+                    {{ batch.failed_rows }}
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="col-md-3">
+
+        <div class="card border-0 shadow-sm h-100">
+
+            <div class="card-body">
+
+                <div class="text-muted">
+                    Approval Stage
+                </div>
+
+                <div class="fw-bold fs-5 mt-2">
+                    Pending HOD Approval
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+
+<!-- GRAPH -->
+
+<div class="card border-0 shadow-sm mb-4">
+
+    <div class="card-body">
+
+        <h5>
+            Upload Processing Summary
+        </h5>
+
+        <div style="max-width: 420px; margin: auto;">
+
+            <canvas id="uploadChart"></canvas>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+
+<!-- SUCCESSFUL ROWS -->
+
+<div class="card border-0 shadow-sm mb-4">
+
+    <div class="card-header bg-white">
+
+        <h5 class="mb-0">
+            Successfully Processed Marks
+        </h5>
+
+    </div>
+
+
+    <div class="table-responsive">
+
+        <table class="table table-hover mb-0">
+
+            <thead class="table-light">
+
+                <tr>
+
+                    <th>Excel Row</th>
+                    <th>Register Number</th>
+                    <th>Student</th>
+                    <th>Department</th>
+                    <th>Subject</th>
+                    <th>Internal</th>
+                    <th>External</th>
+                    <th>Total</th>
+                    <th>Action</th>
+
+                </tr>
+
+            </thead>
+
+
+            <tbody>
+
+                {% for row in successful_rows %}
+
+                <tr>
+
+                    <td>
+                        {{ row.excel_row }}
+                    </td>
+
+                    <td>
+
+                        <a href="{% url 'student_detail' row.student.id %}">
+
+                            {{ row.register_number }}
+
+                        </a>
+
+                    </td>
+
+                    <td>
+                        {{ row.student.name }}
+                    </td>
+
+                    <td>
+                        {{ row.student.department.code }}
+                    </td>
+
+                    <td>
+
+                        {{ row.subject.code }}
+                        -
+                        {{ row.subject.name }}
+
+                    </td>
+
+                    <td>
+                        {{ row.internal }}
+                    </td>
+
+                    <td>
+                        {{ row.external }}
+                    </td>
+
+                    <td class="fw-bold">
+                        {{ row.total }}
+                    </td>
+
+                    <td>
+
+                        {% if row.action == 'CREATED' %}
+
+                            <span class="badge bg-success">
+                                New
+                            </span>
+
+                        {% else %}
+
+                            <span class="badge bg-primary">
+                                Updated
+                            </span>
+
+                        {% endif %}
+
+                    </td>
+
+                </tr>
+
+
+                {% empty %}
+
+                <tr>
+
+                    <td
+                        colspan="9"
+                        class="text-center text-muted py-4"
+                    >
+
+                        No rows were imported successfully.
+
+                    </td>
+
+                </tr>
+
+                {% endfor %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+
+
+<!-- FAILED ROWS -->
+
+<div class="card border-0 shadow-sm">
+
+    <div class="card-header bg-white">
+
+        <h5 class="mb-0">
+            Rows Requiring Correction
+        </h5>
+
+    </div>
+
+
+    <div class="table-responsive">
+
+        <table class="table table-hover mb-0">
+
+            <thead class="table-light">
+
+                <tr>
+
+                    <th>Excel Row</th>
+                    <th>Register Number</th>
+                    <th>Subject Code</th>
+                    <th>Reason</th>
+
+                </tr>
+
+            </thead>
+
+
+            <tbody>
+
+                {% for row in failed_rows %}
+
+                <tr>
+
+                    <td>
+                        {{ row.excel_row }}
+                    </td>
+
+                    <td>
+                        {{ row.register_number|default:"-" }}
+                    </td>
+
+                    <td>
+                        {{ row.subject_code|default:"-" }}
+                    </td>
+
+                    <td>
+
+                        <span class="text-danger">
+
+                            {{ row.message }}
+
+                        </span>
+
+                    </td>
+
+                </tr>
+
+
+                {% empty %}
+
+                <tr>
+
+                    <td
+                        colspan="4"
+                        class="text-center text-success py-4"
+                    >
+
+                        All Excel rows were processed successfully.
+
+                    </td>
+
+                </tr>
+
+                {% endfor %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+
+{{ batch.success_rows|json_script:"success-rows-data" }}
+{{ batch.failed_rows|json_script:"failed-rows-data" }}
+
+<script>
+
+const successRows = JSON.parse(
+    document.getElementById('success-rows-data').textContent
+);
+
+const failedRows = JSON.parse(
+    document.getElementById('failed-rows-data').textContent
+);
+
+const chartElement = document.getElementById('uploadChart');
+
+if (chartElement) {
+
+    new Chart(
+        chartElement,
+        {
+            type: 'doughnut',
+
+            data: {
+                labels: [
+                    'Successfully Imported',
+                    'Failed'
+                ],
+
+                datasets: [
+                    {
+                        data: [
+                            successRows,
+                            failedRows
+                        ]
+                    }
+                ]
+            },
+
+            options: {
+                responsive: true,
+
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        }
+    );
+
+}
+
+</script>
+
+{% endblock %}

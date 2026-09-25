@@ -1,0 +1,598 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+
+
+<!-- PAGE HEADER -->
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+
+    <div>
+
+        <h2 class="mb-1">
+            Student Management
+        </h2>
+
+        <p class="text-muted mb-0">
+            Manage student academic records,
+            performance and complete profile.
+        </p>
+
+    </div>
+
+
+    {% if request.user.is_superuser or role == 'IQAC' or role == 'HOD' %}
+
+    <a
+        href="{% url 'student_add' %}"
+        class="btn btn-primary"
+    >
+
+        <i class="bi bi-person-plus me-1"></i>
+
+        Add Student
+
+    </a>
+
+    {% endif %}
+
+</div>
+
+
+
+<!-- SUMMARY CARDS -->
+
+<div class="row g-3 mb-4">
+
+    <div class="col-md-4">
+
+        <div class="card border-0 shadow-sm">
+
+            <div class="card-body">
+
+                <div class="text-muted">
+                    Total Students
+                </div>
+
+                <div class="display-6 fw-bold">
+                    {{ total_students }}
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="col-md-4">
+
+        <div class="card border-0 shadow-sm">
+
+            <div class="card-body">
+
+                <div class="text-muted">
+                    Departments
+                </div>
+
+                <div class="display-6 fw-bold">
+                    {{ department_count }}
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="col-md-4">
+
+        <div class="card border-0 shadow-sm">
+
+            <div class="card-body">
+
+                <div class="text-muted">
+                    Records Displayed
+                </div>
+
+                <div class="display-6 fw-bold">
+                    {{ filtered_students }}
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+
+<!-- SEARCH AND FILTER -->
+
+<div class="card border-0 shadow-sm mb-4">
+
+    <div class="card-body">
+
+        <form
+            method="get"
+            class="row g-3"
+        >
+
+
+            <!-- SEARCH -->
+
+            <div class="col-lg-4">
+
+                <label class="form-label">
+                    Search Student
+                </label>
+
+                <input
+                    type="text"
+                    name="q"
+                    value="{{ q }}"
+                    class="form-control"
+                    placeholder="Name / Register No / Email / Phone"
+                >
+
+            </div>
+
+
+
+            <!-- DEPARTMENT -->
+
+            <div class="col-lg-3">
+
+                <label class="form-label">
+                    Department
+                </label>
+
+                <select
+                    name="department"
+                    class="form-select"
+                >
+
+                    <option value="">
+                        All Departments
+                    </option>
+
+                    {% for department in departments %}
+
+                    <option
+                        value="{{ department.id }}"
+
+                        {% if selected_department == department.id|stringformat:"s" %}
+                        selected
+                        {% endif %}
+                    >
+
+                        {{ department.code }}
+                        -
+                        {{ department.name }}
+
+                    </option>
+
+                    {% endfor %}
+
+                </select>
+
+            </div>
+
+
+
+            <!-- BATCH -->
+
+            <div class="col-lg-2">
+
+                <label class="form-label">
+                    Batch
+                </label>
+
+                <select
+                    name="batch"
+                    class="form-select"
+                >
+
+                    <option value="">
+                        All Batches
+                    </option>
+
+                    {% for b in batches %}
+
+                    <option
+                        value="{{ b }}"
+
+                        {% if selected_batch == b %}
+                        selected
+                        {% endif %}
+                    >
+
+                        {{ b }}
+
+                    </option>
+
+                    {% endfor %}
+
+                </select>
+
+            </div>
+
+
+
+            <!-- SEMESTER -->
+
+            <div class="col-lg-2">
+
+                <label class="form-label">
+                    Semester
+                </label>
+
+                <select
+                    name="semester"
+                    class="form-select"
+                >
+
+                    <option value="">
+                        All
+                    </option>
+
+
+                    {% for sem in "12345678" %}
+
+                    <option
+                        value="{{ sem }}"
+
+                        {% if selected_semester == sem %}
+                        selected
+                        {% endif %}
+                    >
+
+                        Semester {{ sem }}
+
+                    </option>
+
+                    {% endfor %}
+
+                </select>
+
+            </div>
+
+
+
+            <!-- BUTTON -->
+
+            <div class="col-lg-1 d-flex align-items-end">
+
+                <button
+                    type="submit"
+                    class="btn btn-primary w-100"
+                    title="Search"
+                >
+
+                    <i class="bi bi-search"></i>
+
+                </button>
+
+            </div>
+
+        </form>
+
+
+        {% if q or selected_department or selected_batch or selected_semester %}
+
+        <div class="mt-3">
+
+            <a
+                href="{% url 'students' %}"
+                class="btn btn-sm btn-outline-secondary"
+            >
+
+                Clear Filters
+
+            </a>
+
+        </div>
+
+        {% endif %}
+
+    </div>
+
+</div>
+
+
+
+<!-- STUDENT TABLE -->
+
+<div class="card border-0 shadow-sm">
+
+    <div class="card-header bg-white">
+
+        <div class="d-flex justify-content-between align-items-center">
+
+            <h5 class="mb-0">
+                Student Records
+            </h5>
+
+            <span class="badge bg-primary">
+                {{ filtered_students }} Students
+            </span>
+
+        </div>
+
+    </div>
+
+
+    <div class="table-responsive">
+
+        <table class="table table-hover align-middle mb-0">
+
+            <thead class="table-light">
+
+                <tr>
+
+                    <th>
+                        Register No.
+                    </th>
+
+                    <th>
+                        Student
+                    </th>
+
+                    <th>
+                        Department
+                    </th>
+
+                    <th>
+                        Batch
+                    </th>
+
+                    <th>
+                        Semester
+                    </th>
+
+                    <th>
+                        12th %
+                    </th>
+
+                    <th>
+                        Contact
+                    </th>
+
+                    <th>
+                        Status
+                    </th>
+
+                    <th class="text-end">
+                        Actions
+                    </th>
+
+                </tr>
+
+            </thead>
+
+
+            <tbody>
+
+                {% for student in students %}
+
+                <tr>
+
+
+                    <!-- REGISTER NUMBER -->
+
+                    <td>
+
+                        <strong>
+                            {{ student.register_number }}
+                        </strong>
+
+                    </td>
+
+
+
+                    <!-- NAME -->
+
+                    <td>
+
+                        <div class="fw-semibold">
+
+                            {{ student.name }}
+
+                        </div>
+
+                        <small class="text-muted">
+
+                            {{ student.email|default:"No email" }}
+
+                        </small>
+
+                    </td>
+
+
+
+                    <!-- DEPARTMENT -->
+
+                    <td>
+
+                        <span class="badge bg-light text-dark">
+
+                            {{ student.department.code }}
+
+                        </span>
+
+                    </td>
+
+
+
+                    <!-- BATCH -->
+
+                    <td>
+                        {{ student.batch }}
+                    </td>
+
+
+
+                    <!-- SEMESTER -->
+
+                    <td>
+
+                        Semester
+
+                        {{ student.current_semester }}
+
+                    </td>
+
+
+
+                    <!-- 12th % -->
+
+                    <td>
+
+                        {% if student.class12_percentage %}
+
+                            {{ student.class12_percentage }}%
+
+                        {% else %}
+
+                            -
+
+                        {% endif %}
+
+                    </td>
+
+
+
+                    <!-- CONTACT -->
+
+                    <td>
+
+                        {% if student.phone %}
+
+                            {{ student.phone }}
+
+                        {% else %}
+
+                            -
+
+                        {% endif %}
+
+                    </td>
+
+
+
+                    <!-- ACTIVE STATUS -->
+
+                    <td>
+
+                        {% if student.active %}
+
+                        <span class="badge bg-success">
+                            Active
+                        </span>
+
+                        {% else %}
+
+                        <span class="badge bg-secondary">
+                            Inactive
+                        </span>
+
+                        {% endif %}
+
+                    </td>
+
+
+
+                    <!-- ACTIONS -->
+
+                    <td class="text-end">
+
+                        <a
+                            href="{% url 'student_detail' student.id %}"
+                            class="btn btn-sm btn-outline-primary"
+                        >
+
+                            <i class="bi bi-eye"></i>
+
+                            View
+
+                        </a>
+
+
+                        {% if request.user.is_superuser or role == 'IQAC' or role == 'HOD' %}
+
+                        <a
+                            href="{% url 'student_edit' student.id %}"
+                            class="btn btn-sm btn-outline-secondary"
+                        >
+
+                            <i class="bi bi-pencil"></i>
+
+                            Edit
+
+                        </a>
+
+                        {% endif %}
+
+                    </td>
+
+                </tr>
+
+
+                {% empty %}
+
+
+                <tr>
+
+                    <td
+                        colspan="9"
+                        class="text-center py-5"
+                    >
+
+                        <i
+                            class="bi bi-people display-5 text-muted"
+                        ></i>
+
+                        <h5 class="mt-3">
+                            No Students Found
+                        </h5>
+
+                        <p class="text-muted">
+
+                            Add students or change your search filters.
+
+                        </p>
+
+
+                        {% if request.user.is_superuser or role == 'IQAC' or role == 'HOD' %}
+
+                        <a
+                            href="{% url 'student_add' %}"
+                            class="btn btn-primary"
+                        >
+
+                            Add First Student
+
+                        </a>
+
+                        {% endif %}
+
+                    </td>
+
+                </tr>
+
+
+                {% endfor %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+
+{% endblock %}

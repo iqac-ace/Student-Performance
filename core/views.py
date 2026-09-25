@@ -1,0 +1,2249 @@
+from decimal import Decimal, InvalidOperation
+import os
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
+from django.contrib import messages
+from django.http import HttpResponse, HttpResponseForbidden
+from django.shortcuts import render,redirect,get_object_or_404
+from django.db.models import Avg,Count,Q
+from django.db import transaction
+from django.views.decorators.http import require_POST
+from openpyxl import load_workbook, Workbook
+from .models import *
+from .forms import *
+from .utils import student_spi
+from .models import (Profile,Department,Student,AuditLog,)
+from .forms import StaffCreateForm
+from .forms import (StudentForm,SubjectForm,SemesterResultForm,ActivityForm,ExcelUploadForm,StaffCreateForm,StudentProgressForm,)
+
+def role(user):
+
+    if user.is_superuser:
+        return 'IQAC'
+
+    try:
+        return user.profile.role
+    except Profile.DoesNotExist:
+        return None
+
+
+def dept_scope(user, qs):
+
+    r = role(user)
+
+    # IQAC can see every student
+    if r == 'IQAC' or user.is_superuser:
+        return qs
+
+    # Student can see ONLY their own record
+    if r == 'STUDENT':
+
+        try:
+
+            if user.profile.student_id:
+
+                return qs.filter(
+                    pk=user.profile.student_id
+                )
+
+        except Profile.DoesNotExist:
+            pass
+
+        return qs.none()
+
+    # HOD / Faculty see only their department
+    try:
+
+        return qs.filter(
+            department=user.profile.department
+        )
+
+    except Profile.DoesNotExist:
+
+        return qs.none()
+
+
+@login_required
+def dashboard(request):
+
+    current_role = role(request.user)
+
+    # =====================================
+    # STUDENT LOGIN
+    # =====================================
+
+    if current_role == 'STUDENT':
+
+        try:
+            student = request.user.profile.student
+        except:
+            student = None
+
+        if not student:
+            return HttpResponseForbidden(
+                'Student account is not linked to a student record.'
+            )
+
+        return redirect(
+            'student_detail',
+            pk=student.pk
+        )
+
+
+    # =====================================
+    # IQAC / HOD / FACULTY STUDENT SCOPE
+    # =====================================
+
+    students_qs = dept_scope(
+        request.user,
+        Student.objects.filter(
+            active=True
+        )
+    )
+
+
+    # =====================================
+    # DEPARTMENT SCOPE
+    # =====================================
+
+    departments = Department.objects.filter(
+        active=True
+    )
+
+    if (
+        current_role != 'IQAC'
+        and not request.user.is_superuser
+    ):
+
+        departments = departments.filter(
+            id=request.user.profile.department_id
+        )
+
+
+    # =====================================
+    # BASIC COUNTS
+    # =====================================
+
+    total_students = students_qs.count()
+
+    total_departments = departments.count()
+
+    total_semester_results = SemesterResult.objects.filter(
+        student__in=students_qs
+    ).count()
+
+    total_marks = SubjectMark.objects.filter(
+        student__in=students_qs
+    ).count()
+
+    total_activities = ActivityEvidence.objects.filter(
+        student__in=students_qs
+    ).count()
+
+
+    # =====================================
+    # PENDING APPROVALS
+    # =====================================
+
+    pending_marks = SubjectMark.objects.filter(
+        student__in=students_qs,
+        status='PENDING'
+    ).count()
+
+    pending_semesters = SemesterResult.objects.filter(
+        student__in=students_qs,
+        status='PENDING'
+    ).count()
+
+    pending_activities = ActivityEvidence.objects.filter(
+        student__in=students_qs,
+        status='PENDING'
+    ).count()
+
+    total_pending = (
+        pending_marks
+        + pending_semesters
+        + pending_activities
+    )
+
+
+    # =====================================
+    # APPROVED RECORDS
+    # =====================================
+
+    approved_marks = SubjectMark.objects.filter(
+        student__in=students_qs,
+        status='IQAC_APPROVED'
+    ).count()
+
+    approved_semesters = SemesterResult.objects.filter(
+        student__in=students_qs,
+        status='IQAC_APPROVED'
+    ).count()
+
+    approved_activities = ActivityEvidence.objects.filter(
+        student__in=students_qs,
+        status='IQAC_APPROVED'
+    ).count()
+
+
+    # =====================================
+    # AVERAGE CGPA
+    # =====================================
+
+    avg_cgpa = SemesterResult.objects.filter(
+        student__in=students_qs
+    ).aggregate(
+        value=Avg('cgpa')
+    )['value'] or 0
+
+
+    # =====================================
+    # AVERAGE 12TH %
+    # =====================================
+
+    avg_class12 = students_qs.aggregate(
+        value=Avg('class12_percentage')
+    )['value'] or 0
+
+
+    # =====================================
+    # DEPARTMENT PERFORMANCE
+    # =====================================
+
+    department_stats = []
+
+    for department in departments:
+
+        department_students = students_qs.filter(
+            department=department
+        )
+
+        dept_avg_12 = department_students.aggregate(
+            value=Avg('class12_percentage')
+        )['value'] or 0
+
+        dept_avg_cgpa = SemesterResult.objects.filter(
+            student__in=department_students
+        ).aggregate(
+            value=Avg('cgpa')
+        )['value'] or 0
+
+        dept_results = SemesterResult.objects.filter(
+            student__in=department_students
+        ).count()
+
+        department_stats.append(
+            {
+                'id': department.id,
+                'code': department.code,
+                'name': department.name,
+                'students': department_students.count(),
+                'avg12': round(
+                    float(dept_avg_12),
+                    2
+                ),
+                'avgcgpa': round(
+                    float(dept_avg_cgpa),
+                    2
+                ),
+                'results': dept_results
+            }
+        )
+
+
+    # =====================================
+    # PREVIOUS / RECENT SEMESTER RESULTS
+    # =====================================
+
+    recent_semester_results = SemesterResult.objects.filter(
+        student__in=students_qs
+    ).select_related(
+        'student',
+        'student__department'
+    ).order_by(
+        '-id'
+    )[:10]
+
+
+    # =====================================
+    # PREVIOUS MARK RECORDS
+    # =====================================
+
+    recent_marks = SubjectMark.objects.filter(
+        student__in=students_qs
+    ).select_related(
+        'student',
+        'subject'
+    ).order_by(
+        '-id'
+    )[:10]
+
+
+    # =====================================
+    # PREVIOUS ACTIVITIES
+    # =====================================
+
+    recent_activities = ActivityEvidence.objects.filter(
+        student__in=students_qs
+    ).select_related(
+        'student',
+        'parameter'
+    ).order_by(
+        '-id'
+    )[:10]
+
+
+    # =====================================
+    # EXCEL UPLOAD HISTORY
+    # =====================================
+
+    uploads = MarksUploadBatch.objects.all()
+
+    if (
+        current_role != 'IQAC'
+        and not request.user.is_superuser
+    ):
+
+        uploads = uploads.filter(
+            department=request.user.profile.department
+        )
+
+    recent_uploads = uploads.select_related(
+        'uploaded_by',
+        'department'
+    ).order_by(
+        '-uploaded_at'
+    )[:5]
+
+
+    # =====================================
+    # DASHBOARD CARDS
+    # =====================================
+
+    cards = {
+
+        'students': total_students,
+
+        'departments': total_departments,
+
+        'results': total_semester_results,
+
+        'marks': total_marks,
+
+        'activities': total_activities,
+
+        'pending': total_pending,
+
+        'avg_cgpa': round(
+            float(avg_cgpa),
+            2
+        ),
+
+        'avg_class12': round(
+            float(avg_class12),
+            2
+        ),
+
+        'approved_marks': approved_marks,
+
+        'approved_semesters': approved_semesters,
+
+        'approved_activities': approved_activities,
+    }
+
+
+    return render(
+        request,
+        'core/dashboard.html',
+        {
+
+            'cards': cards,
+
+            'department_stats': department_stats,
+
+            'recent_semester_results':
+                recent_semester_results,
+
+            'recent_marks':
+                recent_marks,
+
+            'recent_activities':
+                recent_activities,
+
+            'recent_uploads':
+                recent_uploads,
+
+            'role':
+                current_role
+        }
+    )   
+@login_required
+def students(request):
+
+    current_role = role(request.user)
+
+    # Students should not open the full student list
+    if current_role == 'STUDENT':
+
+        if request.user.profile.student:
+            return redirect(
+                'student_detail',
+                pk=request.user.profile.student.id
+            )
+
+        return HttpResponseForbidden(
+            'Student account is not linked.'
+        )
+
+
+    # ---------------------------------
+    # STUDENTS AVAILABLE TO USER
+    # ---------------------------------
+
+    base_students = dept_scope(
+        request.user,
+        Student.objects.filter(
+            active=True
+        ).select_related(
+            'department'
+        )
+    )
+
+
+    # ---------------------------------
+    # FILTER VALUES
+    # ---------------------------------
+
+    search = request.GET.get(
+        'q',
+        ''
+    ).strip()
+
+    department_id = request.GET.get(
+        'department',
+        ''
+    ).strip()
+
+    batch = request.GET.get(
+        'batch',
+        ''
+    ).strip()
+
+    semester = request.GET.get(
+        'semester',
+        ''
+    ).strip()
+
+
+    students_qs = base_students
+
+
+    # ---------------------------------
+    # SEARCH
+    # ---------------------------------
+
+    if search:
+
+        students_qs = students_qs.filter(
+
+            Q(
+                register_number__icontains=search
+            )
+
+            |
+
+            Q(
+                name__icontains=search
+            )
+
+            |
+
+            Q(
+                email__icontains=search
+            )
+
+            |
+
+            Q(
+                phone__icontains=search
+            )
+
+            |
+
+            Q(
+                department__code__icontains=search
+            )
+        )
+
+
+    # ---------------------------------
+    # DEPARTMENT FILTER
+    # ---------------------------------
+
+    if department_id:
+
+        students_qs = students_qs.filter(
+            department_id=department_id
+        )
+
+
+    # ---------------------------------
+    # BATCH FILTER
+    # ---------------------------------
+
+    if batch:
+
+        students_qs = students_qs.filter(
+            batch=batch
+        )
+
+
+    # ---------------------------------
+    # SEMESTER FILTER
+    # ---------------------------------
+
+    if semester:
+
+        students_qs = students_qs.filter(
+            current_semester=semester
+        )
+
+
+    students_qs = students_qs.order_by(
+        'department__code',
+        'register_number'
+    )
+
+
+    # ---------------------------------
+    # FILTER OPTIONS
+    # ---------------------------------
+
+    departments = Department.objects.filter(
+        active=True
+    )
+
+    if (
+        current_role != 'IQAC'
+        and not request.user.is_superuser
+    ):
+
+        departments = departments.filter(
+            id=request.user.profile.department_id
+        )
+
+
+    batches = (
+        base_students
+        .values_list(
+            'batch',
+            flat=True
+        )
+        .distinct()
+        .order_by(
+            '-batch'
+        )
+    )
+
+
+    # ---------------------------------
+    # SUMMARY
+    # ---------------------------------
+
+    total_students = base_students.count()
+
+    filtered_students = students_qs.count()
+
+    department_count = (
+        base_students
+        .values(
+            'department'
+        )
+        .distinct()
+        .count()
+    )
+
+
+    return render(
+        request,
+        'core/students.html',
+        {
+
+            'students':
+                students_qs,
+
+            'departments':
+                departments,
+
+            'batches':
+                batches,
+
+            'q':
+                search,
+
+            'selected_department':
+                department_id,
+
+            'selected_batch':
+                batch,
+
+            'selected_semester':
+                semester,
+
+            'total_students':
+                total_students,
+
+            'filtered_students':
+                filtered_students,
+
+            'department_count':
+                department_count,
+
+            'role':
+                current_role,
+        }
+    )
+     
+@login_required
+def student_detail(request, pk):
+
+    s = get_object_or_404(
+        dept_scope(
+            request.user,
+            Student.objects.select_related(
+                'department'
+            )
+        ),
+        pk=pk
+    )
+
+    marks = s.subject_marks.select_related(
+        'subject'
+    )
+
+    semesters = s.semester_results.all()
+
+    activities = s.activities.select_related(
+        'parameter'
+    )
+
+    # Students see only fully approved information
+    if role(request.user) == 'STUDENT':
+
+        marks = marks.filter(
+            status='IQAC_APPROVED'
+        )
+
+        semesters = semesters.filter(
+            status='IQAC_APPROVED'
+        )
+
+        activities = activities.filter( Q(status='HOD_APPROVED')|Q(status='IQAC_APPROVED')
+        )
+
+    marks = marks.order_by(
+        'subject__semester',
+        'subject__code'
+    )
+
+    semesters = semesters.order_by(
+        'semester'
+    )
+
+    activities = activities.order_by(
+        '-activity_date'
+    )
+
+    scores, total, level = student_spi(s)
+
+    trend = [
+        {
+            'semester': r.semester,
+            'sgpa': float(r.sgpa or 0),
+            'cgpa': float(r.cgpa or 0)
+        }
+        for r in semesters
+    ]
+
+    return render(
+        request,
+        'core/student_detail.html',
+        {
+            's': s,
+            'marks': marks,
+            'semesters': semesters,
+            'activities': activities,
+            'scores': scores,
+            'spi': total,
+            'level': level,
+            'trend': trend
+        }
+    )
+@login_required
+def student_add(request):
+
+    current_role = role(request.user)
+
+    if current_role not in [
+        'IQAC',
+        'HOD',
+        'FACULTY'
+    ] and not request.user.is_superuser:
+
+        return HttpResponseForbidden(
+            'Not authorized.'
+        )
+
+
+    form = StudentForm(
+        request.POST or None
+    )
+
+
+    if form.is_valid():
+
+        student = form.save(
+            commit=False
+        )
+
+
+        # HOD and Faculty can create students
+        # only inside their department
+        if current_role in [
+            'HOD',
+            'FACULTY'
+        ]:
+
+            student.department = (
+                request.user.profile.department
+            )
+
+
+        student.save()
+
+
+        messages.success(
+            request,
+            'Student added successfully.'
+        )
+
+        return redirect(
+            'students'
+        )
+
+
+    return render(
+        request,
+        'core/form.html',
+        {
+            'form': form,
+            'title': 'Add Student'
+        }
+    )
+@login_required
+def student_progress_upload(request):
+
+    if role(request.user) != 'STUDENT':
+
+        return HttpResponseForbidden(
+            'Student access only.'
+        )
+
+
+    student = request.user.profile.student
+
+
+    if not student:
+
+        return HttpResponseForbidden(
+            'Your login is not linked to a student record.'
+        )
+
+
+    form = StudentProgressForm(
+        request.POST or None,
+        request.FILES or None
+    )
+
+
+    if form.is_valid():
+
+        progress = form.save(
+            commit=False
+        )
+
+        # Always force logged-in student
+        progress.student = student
+
+        progress.created_by = (
+            request.user
+        )
+
+        # Student cannot assign score
+        progress.level = 0
+        progress.points = 0
+
+        # Must be verified by HOD
+        progress.status = 'PENDING'
+
+        progress.save()
+
+
+        AuditLog.objects.create(
+
+            actor=request.user,
+
+            action='Student progress uploaded',
+
+            entity='ActivityEvidence',
+
+            entity_id=str(
+                progress.id
+            ),
+
+            details=progress.title
+        )
+
+
+        messages.success(
+            request,
+            'Progress uploaded successfully. '
+            'Waiting for HOD verification.'
+        )
+
+
+        return redirect(
+            'student_detail',
+            pk=student.id
+        )
+
+
+    return render(
+        request,
+        'core/form.html',
+        {
+            'form': form,
+            'title': 'Upload My Progress'
+        }
+    )
+
+@login_required
+def student_edit(request, pk):
+    # Only IQAC and HOD can edit student details
+    if role(request.user) not in ['IQAC', 'HOD'] and not request.user.is_superuser:
+        return HttpResponseForbidden('Not authorized')
+
+    student = get_object_or_404(Student, pk=pk)
+
+    # HOD can edit only students from their own department
+    if role(request.user) == 'HOD':
+        if student.department_id != request.user.profile.department_id:
+            return HttpResponseForbidden(
+                'You cannot edit students from another department'
+            )
+
+    form = StudentForm(
+        request.POST or None,
+        instance=student
+    )
+
+    if form.is_valid():
+        updated_student = form.save(commit=False)
+
+        # HOD should not be able to transfer student to another department
+        if role(request.user) == 'HOD':
+            updated_student.department = request.user.profile.department
+
+        updated_student.save()
+
+        # Create audit record
+        AuditLog.objects.create(
+            actor=request.user,
+            action='Student details updated',
+            entity='Student',
+            entity_id=str(updated_student.id),
+            details=f'Updated student: {updated_student.register_number} - {updated_student.name}'
+        )
+
+        messages.success(
+            request,
+            'Student details updated successfully.'
+        )
+
+        return redirect(
+            'student_detail',
+            pk=updated_student.pk
+        )
+
+    return render(
+        request,
+        'core/form.html',
+        {
+            'form': form,
+            'title': f'Edit Student - {student.name}'
+        }
+    )
+
+@login_required
+def departments(request):
+    return render(request,'core/departments.html',{'departments':Department.objects.all()})
+
+@login_required
+def department_add(request):
+    if role(request.user)!='IQAC' and not request.user.is_superuser:return HttpResponseForbidden('IQAC only')
+    form=DepartmentForm(request.POST or None)
+    if form.is_valid():form.save();messages.success(request,'Department created.');return redirect('departments')
+    return render(request,'core/form.html',{'form':form,'title':'Create Department'})
+
+@login_required
+def staff_add(request):
+
+    # ==========================================
+    # 1. IDENTIFY WHO IS CREATING THE LOGIN
+    # ==========================================
+
+    creator_role = role(request.user)
+
+    # Superuser is treated as IQAC
+    if request.user.is_superuser:
+        creator_role = 'IQAC'
+
+
+    # ==========================================
+    # 2. DEFINE ROLE CREATION PERMISSIONS
+    # ==========================================
+
+    allowed_roles = {
+
+        'IQAC': [
+            'IQAC',
+            'HOD',
+            'FACULTY',
+            'STUDENT',
+        ],
+
+        'HOD': [
+            'FACULTY',
+            'STUDENT',
+        ],
+
+        'FACULTY': [
+            'STUDENT',
+        ],
+    }
+
+
+    # Student or invalid user cannot create accounts
+    if creator_role not in allowed_roles:
+
+        return HttpResponseForbidden(
+            'You are not authorized to create login accounts.'
+        )
+
+
+    # ==========================================
+    # 3. LOAD FORM
+    # ==========================================
+
+    form = StaffCreateForm(
+        request.POST or None
+    )
+   
+
+    # ==========================================
+    # 4. SHOW ONLY ALLOWED ROLES IN DROPDOWN
+    # ==========================================
+
+    role_labels = {
+        'IQAC': 'IQAC Coordinator',
+        'HOD': 'Head of Department',
+        'FACULTY': 'Faculty',
+        'STUDENT': 'Student',
+    }
+
+    form.fields['role'].choices = [
+
+        (
+            role_name,
+            role_labels[role_name]
+        )
+
+        for role_name in allowed_roles[creator_role]
+    ]
+
+
+    # ==========================================
+    # 5. LIMIT DEPARTMENT / STUDENT OPTIONS
+    # ==========================================
+
+    if creator_role in [
+        'HOD',
+        'FACULTY'
+    ]:
+
+        creator_department = (
+            request.user.profile.department
+        )
+
+        # They can see only their own department
+        form.fields['department'].queryset = (
+            Department.objects.filter(
+                id=creator_department.id,
+                active=True
+            )
+        )
+
+        # They can create student login only
+        # for their own department students
+        form.fields['student'].queryset = (
+            Student.objects.filter(
+                department=creator_department,
+                active=True
+            ).order_by(
+                'register_number'
+            )
+        )
+
+
+    else:
+
+        # IQAC sees all departments
+        form.fields['department'].queryset = (
+            Department.objects.filter(
+                active=True
+            ).order_by(
+                'code'
+            )
+        )
+
+        # IQAC sees all students
+        form.fields['student'].queryset = (
+            Student.objects.filter(
+                active=True
+            ).select_related(
+                'department'
+            ).order_by(
+                'department__code',
+                'register_number'
+            )
+        )
+
+
+    # ==========================================
+    # 6. PROCESS FORM
+    # ==========================================
+
+    if request.method == 'POST' and form.is_valid():
+
+        new_role = form.cleaned_data[
+            'role'
+        ]
+
+
+        # --------------------------------------
+        # SECURITY CHECK
+        # --------------------------------------
+
+        if new_role not in allowed_roles[
+            creator_role
+        ]:
+
+            return HttpResponseForbidden(
+                'You cannot create this type of account.'
+            )
+
+
+        username = (
+            form.cleaned_data[
+                'username'
+            ].strip()
+        )
+
+        password = form.cleaned_data[
+            'password'
+        ]
+
+        first_name = form.cleaned_data.get(
+            'first_name',
+            ''
+        )
+
+        last_name = form.cleaned_data.get(
+            'last_name',
+            ''
+        )
+
+        email = form.cleaned_data.get(
+            'email',
+            ''
+        )
+
+
+        selected_department = (
+            form.cleaned_data.get(
+                'department'
+            )
+        )
+
+        selected_student = (
+            form.cleaned_data.get(
+                'student'
+            )
+        )
+
+
+        # ======================================
+        # 7. USERNAME DUPLICATE CHECK
+        # ======================================
+
+        if User.objects.filter(
+            username__iexact=username
+        ).exists():
+
+            messages.error(
+                request,
+                'Username already exists.'
+            )
+
+            return render(
+                request,
+                'core/form.html',
+                {
+                    'form': form,
+                    'title': 'Create Login'
+                }
+            )
+
+
+        # ======================================
+        # 8. HOD / FACULTY DEPARTMENT SECURITY
+        # ======================================
+
+        if creator_role in [
+            'HOD',
+            'FACULTY'
+        ]:
+
+            creator_department = (
+                request.user.profile.department
+            )
+
+            # Force department automatically
+            selected_department = (
+                creator_department
+            )
+
+
+        # ======================================
+        # 9. STUDENT ACCOUNT
+        # ======================================
+
+        if new_role == 'STUDENT':
+
+            if not selected_student:
+
+                messages.error(
+                    request,
+                    'Please select the student record.'
+                )
+
+                return render(
+                    request,
+                    'core/form.html',
+                    {
+                        'form': form,
+                        'title': 'Create Login'
+                    }
+                )
+
+
+            # HOD / Faculty cannot create
+            # another department student's login
+
+            if creator_role in [
+                'HOD',
+                'FACULTY'
+            ]:
+
+                if (
+                    selected_student.department_id
+                    !=
+                    request.user.profile.department_id
+                ):
+
+                    return HttpResponseForbidden(
+                        'You cannot create a login '
+                        'for another department student.'
+                    )
+
+
+            # Prevent duplicate login for student
+
+            if Profile.objects.filter(
+                student=selected_student
+            ).exists():
+
+                messages.error(
+                    request,
+                    'This student already has a login account.'
+                )
+
+                return render(
+                    request,
+                    'core/form.html',
+                    {
+                        'form': form,
+                        'title': 'Create Login'
+                    }
+                )
+
+
+            # Student department is automatically
+            # taken from Student Master
+
+            selected_department = (
+                selected_student.department
+            )
+
+
+            # If name/email are empty,
+            # take them from Student Master
+
+            if not first_name:
+                first_name = (
+                    selected_student.name
+                )
+
+            if not email:
+                email = (
+                    selected_student.email
+                    or ''
+                )
+
+
+        # ======================================
+        # 10. HOD / FACULTY REQUIRE DEPARTMENT
+        # ======================================
+
+        if new_role in [
+            'HOD',
+            'FACULTY'
+        ]:
+
+            if not selected_department:
+
+                messages.error(
+                    request,
+                    'Department is required '
+                    'for HOD and Faculty accounts.'
+                )
+
+                return render(
+                    request,
+                    'core/form.html',
+                    {
+                        'form': form,
+                        'title': 'Create Login'
+                    }
+                )
+
+
+        # ======================================
+        # 11. IQAC ACCOUNT
+        # ======================================
+
+        if new_role == 'IQAC':
+
+            # IQAC does not need department
+            selected_department = None
+
+            selected_student = None
+
+
+        # ======================================
+        # 12. NON-STUDENT ACCOUNTS
+        # ======================================
+
+        if new_role != 'STUDENT':
+
+            selected_student = None
+
+
+        # ======================================
+        # 13. CREATE USER + PROFILE SAFELY
+        # ======================================
+
+        try:
+
+            with transaction.atomic():
+
+                new_user = (
+                    User.objects.create_user(
+
+                        username=username,
+
+                        password=password,
+
+                        first_name=first_name,
+
+                        last_name=last_name,
+
+                        email=email
+                    )
+                )
+
+
+                Profile.objects.create(
+
+                    user=new_user,
+
+                    role=new_role,
+
+                    department=selected_department,
+
+                    student=selected_student
+                )
+
+
+                # Optional audit history
+                AuditLog.objects.create(
+
+                    actor=request.user,
+
+                    action='Login account created',
+
+                    entity='User',
+
+                    entity_id=str(
+                        new_user.id
+                    ),
+
+                    details=(
+                        f'Created {new_role} account: '
+                        f'{username}'
+                    )
+                )
+
+
+        except Exception as e:
+
+            messages.error(
+                request,
+                f'Unable to create account: {e}'
+            )
+
+            return render(
+                request,
+                'core/form.html',
+                {
+                    'form': form,
+                    'title': 'Create Login'
+                }
+            )
+
+
+        # ======================================
+        # 14. SUCCESS
+        # ======================================
+
+        messages.success(
+            request,
+            f'{new_role} login '
+            f'"{username}" created successfully.'
+        )
+
+
+        return redirect(
+            'dashboard'
+        )
+
+
+    # ==========================================
+    # 15. DISPLAY FORM
+    # ==========================================
+
+    return render(
+        request,
+        'core/form.html',
+        {
+            'form': form,
+            'title': 'Create Login'
+        }
+    )
+
+@login_required
+def subjects(request):
+    qs=Subject.objects.select_related('department').order_by('department','semester','code')
+    if role(request.user)!='IQAC' and not request.user.is_superuser: qs=qs.filter(department=request.user.profile.department)
+    return render(request,'core/subjects.html',{'subjects':qs})
+
+@login_required
+def subject_add(request):
+    if role(request.user) not in ['IQAC','HOD']:return HttpResponseForbidden('Not authorized')
+    form=SubjectForm(request.POST or None)
+    if form.is_valid():form.save();messages.success(request,'Subject added.');return redirect('subjects')
+    return render(request,'core/form.html',{'form':form,'title':'Add Subject'})
+
+@login_required
+def marks_template(request):
+    if role(request.user) not in [
+    'IQAC',
+    'HOD',
+    'FACULTY'
+]:
+        return HttpResponseForbidden(
+        'Not authorized.'
+    )
+    wb=Workbook();ws=wb.active;ws.title='Marks'
+    ws.append(['Register Number','Subject Code','Internal','External'])
+    ws.append(['21CSE001','CS401','35','54'])
+    response=HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition']='attachment; filename="ACE_Marks_Upload_Template.xlsx"';wb.save(response);return response
+
+def normalize_register(value):
+    """
+    Makes register numbers from Excel easier to match.
+    Examples:
+    21CSE001 -> 21CSE001
+    ' 21cse001 ' -> 21CSE001
+    21001.0 -> 21001
+    """
+
+    if value is None:
+        return ''
+
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
+
+    return str(value).strip().upper().replace(' ', '')
+
+
+def normalize_subject_code(value):
+
+    if value is None:
+        return ''
+
+    return str(value).strip().upper().replace(' ', '')
+
+
+def normalize_header(value):
+
+    if value is None:
+        return ''
+
+    return (
+        str(value)
+        .strip()
+        .lower()
+        .replace(' ', '')
+        .replace('_', '')
+        .replace('-', '')
+    )
+
+
+def decimal_value(value):
+
+    if value is None or value == '':
+        raise ValueError('Mark is empty')
+
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        raise ValueError(
+            f'Invalid mark value: {value}'
+        )
+
+@login_required
+def marks_upload(request):
+    if role(request.user) not in [
+    'IQAC',
+    'HOD',
+    'FACULTY'
+]:
+        return HttpResponseForbidden(
+        'Students cannot upload marks.'
+    )
+
+    form = ExcelUploadForm(
+        request.POST or None,
+        request.FILES or None
+    )
+
+    if request.method == 'POST' and form.is_valid():
+
+        uploaded_file = form.cleaned_data['file']
+
+        # ------------------------------
+        # CHECK FILE TYPE
+        # ------------------------------
+
+        if not uploaded_file.name.lower().endswith('.xlsx'):
+
+            messages.error(
+                request,
+                'Please upload only an Excel .xlsx file.'
+            )
+
+            return redirect('marks_upload')
+
+
+        # ------------------------------
+        # CREATE UPLOAD BATCH
+        # ------------------------------
+
+        upload_department = None
+
+        if (
+            role(request.user) != 'IQAC'
+            and not request.user.is_superuser
+        ):
+            upload_department = request.user.profile.department
+
+
+        batch = MarksUploadBatch.objects.create(
+
+            file_name=uploaded_file.name,
+
+            uploaded_by=request.user,
+
+            department=upload_department
+        )
+
+
+        try:
+
+            wb = load_workbook(
+                uploaded_file,
+                data_only=True,
+                read_only=True
+            )
+
+            ws = wb.active
+
+        except Exception as e:
+
+            batch.delete()
+
+            messages.error(
+                request,
+                f'Unable to read Excel file: {e}'
+            )
+
+            return redirect('marks_upload')
+
+
+        # ------------------------------
+        # READ HEADER ROW
+        # ------------------------------
+
+        first_row = next(
+            ws.iter_rows(
+                min_row=1,
+                max_row=1,
+                values_only=True
+            ),
+            None
+        )
+
+        if not first_row:
+
+            batch.delete()
+
+            messages.error(
+                request,
+                'The Excel file is empty.'
+            )
+
+            return redirect('marks_upload')
+
+
+        headers = {}
+
+        for index, heading in enumerate(first_row):
+
+            key = normalize_header(heading)
+
+            if key:
+                headers[key] = index
+
+
+        required_headers = {
+            'registernumber': 'Register Number',
+            'subjectcode': 'Subject Code',
+            'internal': 'Internal',
+            'external': 'External',
+        }
+
+
+        missing = []
+
+        for key, display_name in required_headers.items():
+
+            if key not in headers:
+                missing.append(display_name)
+
+
+        if missing:
+
+            batch.delete()
+
+            messages.error(
+                request,
+                'Missing required column(s): '
+                + ', '.join(missing)
+            )
+
+            return redirect('marks_upload')
+
+
+        # ------------------------------
+        # STUDENT LOOKUP CACHE
+        # ------------------------------
+
+        student_queryset = dept_scope(
+            request.user,
+            Student.objects.filter(active=True)
+        )
+
+
+        student_map = {
+
+            normalize_register(student.register_number): student
+
+            for student in student_queryset
+        }
+
+
+        # ------------------------------
+        # SUBJECT LOOKUP CACHE
+        # ------------------------------
+
+        subject_queryset = Subject.objects.select_related(
+            'department'
+        )
+
+
+        if (
+            role(request.user) != 'IQAC'
+            and not request.user.is_superuser
+        ):
+
+            subject_queryset = subject_queryset.filter(
+                department=request.user.profile.department
+            )
+
+
+        subject_map = {
+
+            (
+                subject.department_id,
+                normalize_subject_code(subject.code)
+            ): subject
+
+            for subject in subject_queryset
+        }
+
+
+        success_count = 0
+        failed_count = 0
+        total_count = 0
+
+
+        # ------------------------------
+        # PROCESS EXCEL ROWS
+        # ------------------------------
+
+        for row_number, row in enumerate(
+            ws.iter_rows(
+                min_row=2,
+                values_only=True
+            ),
+            start=2
+        ):
+
+            # Ignore completely blank rows
+
+            if not row or not any(
+                value not in (None, '')
+                for value in row
+            ):
+                continue
+
+
+            total_count += 1
+
+
+            register_number = normalize_register(
+                row[
+                    headers['registernumber']
+                ]
+            )
+
+
+            subject_code = normalize_subject_code(
+                row[
+                    headers['subjectcode']
+                ]
+            )
+
+
+            upload_row = MarksUploadRow.objects.create(
+
+                batch=batch,
+
+                excel_row=row_number,
+
+                register_number=register_number,
+
+                subject_code=subject_code
+            )
+
+
+            try:
+
+                # --------------------------
+                # VALIDATE REGISTER NUMBER
+                # --------------------------
+
+                if not register_number:
+
+                    raise ValueError(
+                        'Register Number is empty.'
+                    )
+
+
+                student = student_map.get(
+                    register_number
+                )
+
+
+                if not student:
+
+                    raise ValueError(
+                        f'Student {register_number} '
+                        f'not found in Student Master.'
+                    )
+
+
+                upload_row.student = student
+
+
+                # --------------------------
+                # VALIDATE SUBJECT
+                # --------------------------
+
+                if not subject_code:
+
+                    raise ValueError(
+                        'Subject Code is empty.'
+                    )
+
+
+                subject = subject_map.get(
+
+                    (
+                        student.department_id,
+                        subject_code
+                    )
+                )
+
+
+                if not subject:
+
+                    raise ValueError(
+
+                        f'Subject {subject_code} '
+                        f'not found for '
+                        f'{student.department.code}.'
+                    )
+
+
+                upload_row.subject = subject
+
+
+                # --------------------------
+                # READ MARKS
+                # --------------------------
+
+                internal = decimal_value(
+
+                    row[
+                        headers['internal']
+                    ]
+                )
+
+
+                external = decimal_value(
+
+                    row[
+                        headers['external']
+                    ]
+                )
+
+
+                # --------------------------
+                # VALIDATE MARK RANGE
+                # --------------------------
+
+                if internal < 0:
+
+                    raise ValueError(
+                        'Internal mark cannot be negative.'
+                    )
+
+
+                if external < 0:
+
+                    raise ValueError(
+                        'External mark cannot be negative.'
+                    )
+
+
+                if internal > subject.max_internal:
+
+                    raise ValueError(
+
+                        f'Internal mark {internal} '
+                        f'exceeds maximum '
+                        f'{subject.max_internal}.'
+                    )
+
+
+                if external > subject.max_external:
+
+                    raise ValueError(
+
+                        f'External mark {external} '
+                        f'exceeds maximum '
+                        f'{subject.max_external}.'
+                    )
+
+
+                total = internal + external
+
+
+                # --------------------------
+                # SAVE / UPDATE MARK
+                # --------------------------
+
+                mark, created = SubjectMark.objects.update_or_create(
+
+                    student=student,
+
+                    subject=subject,
+
+                    defaults={
+
+                        'internal': internal,
+
+                        'external': external,
+
+                        # Re-upload requires approval again
+                        'status': 'PENDING',
+
+                        'uploaded_by': request.user
+                    }
+                )
+
+
+                upload_row.internal = internal
+                upload_row.external = external
+                upload_row.total = total
+
+                upload_row.success = True
+
+                upload_row.action = (
+                    'CREATED'
+                    if created
+                    else 'UPDATED'
+                )
+
+                upload_row.message = (
+                    'Imported successfully. '
+                    'Pending HOD approval.'
+                )
+
+                upload_row.save()
+
+
+                AuditLog.objects.create(
+
+                    actor=request.user,
+
+                    action='Excel mark upload',
+
+                    entity='SubjectMark',
+
+                    entity_id=str(mark.id),
+
+                    details=(
+                        f'{student.register_number} | '
+                        f'{subject.code} | '
+                        f'Internal {internal} | '
+                        f'External {external}'
+                    )
+                )
+
+
+                success_count += 1
+
+
+            except Exception as e:
+
+                upload_row.success = False
+
+                upload_row.message = str(e)
+
+                upload_row.save()
+
+                failed_count += 1
+
+
+        # ------------------------------
+        # UPDATE BATCH COUNTS
+        # ------------------------------
+
+        batch.total_rows = total_count
+        batch.success_rows = success_count
+        batch.failed_rows = failed_count
+
+        batch.save()
+
+
+        # ------------------------------
+        # OPEN RESULT DASHBOARD
+        # ------------------------------
+
+        return redirect(
+            'marks_upload_result',
+            batch_id=batch.id
+        )
+
+
+    return render(
+        request,
+        'core/upload.html',
+        {
+            'form': form
+        }
+    )
+@login_required
+def marks_upload_result(request, batch_id):
+
+    batch = get_object_or_404(
+        MarksUploadBatch.objects.select_related(
+            'uploaded_by',
+            'department'
+        ),
+        pk=batch_id
+    )
+
+
+    # Faculty/HOD cannot see uploads
+    # belonging to another department
+
+    if (
+        role(request.user) != 'IQAC'
+        and not request.user.is_superuser
+    ):
+
+        if (
+            batch.department_id
+            != request.user.profile.department_id
+        ):
+
+            return HttpResponseForbidden(
+                'You cannot view this upload.'
+            )
+
+
+    rows = batch.rows.select_related(
+        'student',
+        'subject',
+        'student__department'
+    ).order_by('excel_row')
+
+
+    successful_rows = rows.filter(
+        success=True
+    )
+
+
+    failed_rows = rows.filter(
+        success=False
+    )
+
+
+    return render(
+        request,
+        'core/marks_upload_result.html',
+        {
+            'batch': batch,
+            'rows': rows,
+            'successful_rows': successful_rows,
+            'failed_rows': failed_rows
+        }
+    )
+
+@login_required
+def semester_add(request):
+    if role(request.user) not in [
+    'IQAC',
+    'HOD',
+    'FACULTY'
+]:
+        return HttpResponseForbidden(
+        'Not authorized.'
+    )
+    form=SemesterResultForm(request.POST or None)
+    if form.is_valid():
+        obj=form.save(commit=False)
+        if role(request.user)!='IQAC' and obj.student.department_id!=request.user.profile.department_id:return HttpResponseForbidden('Wrong department')
+        obj.uploaded_by=request.user;obj.status='PENDING';obj.save();messages.success(request,'Semester result saved for approval.');return redirect('student_detail',pk=obj.student_id)
+    return render(request,'core/form.html',{'form':form,'title':'Add Semester Result'})
+
+@login_required
+def activity_add(request):
+    if role(request.user) not in [
+    'IQAC',
+    'HOD',
+    'FACULTY'
+]:
+        return HttpResponseForbidden(
+        'Not authorized.'
+    )
+    form=ActivityEvidenceForm(request.POST or None,request.FILES or None)
+    if form.is_valid():
+        obj=form.save(commit=False)
+        if role(request.user)!='IQAC' and obj.student.department_id!=request.user.profile.department_id:return HttpResponseForbidden('Wrong department')
+        obj.created_by=request.user;obj.status='PENDING'
+        # 0-4 mapped to achievement bands by midpoint; assessor can edit points later via admin if needed.
+        ratios={0:0,1:.37,2:.62,3:.82,4:.95};obj.points=round(obj.parameter.max_points*ratios.get(obj.level,0),2)
+        obj.save();messages.success(request,'Activity/evidence submitted.');return redirect('student_detail',pk=obj.student_id)
+    return render(request,'core/form.html',{'form':form,'title':'Add Activity / Evidence'})
+
+@login_required
+def approvals(request):
+    r=role(request.user)
+    if r not in ['IQAC','HOD'] and not request.user.is_superuser:return HttpResponseForbidden('Not authorized')
+    students=dept_scope(request.user,Student.objects.all())
+    activities=ActivityEvidence.objects.filter(student__in=students)
+    semesters=SemesterResult.objects.filter(student__in=students)
+    marks=SubjectMark.objects.filter(student__in=students)
+    if r=='HOD': activities=activities.filter(status='PENDING');semesters=semesters.filter(status='PENDING');marks=marks.filter(status='PENDING')
+    else: activities=activities.filter(status='HOD_APPROVED');semesters=semesters.filter(status='HOD_APPROVED');marks=marks.filter(status='HOD_APPROVED')
+    return render(request,'core/approvals.html',{'activities':activities.select_related('student','parameter'),'semesters':semesters.select_related('student'),'marks':marks.select_related('student','subject'),'role':r})
+
+@login_required
+@require_POST
+def approve(request, model, pk, decision):
+
+    current_role = role(request.user)
+
+    modelmap = {
+        'activity': ActivityEvidence,
+        'semester': SemesterResult,
+        'mark': SubjectMark
+    }
+
+
+    if model not in modelmap:
+
+        return HttpResponseForbidden(
+            'Invalid record.'
+        )
+
+
+    obj = get_object_or_404(
+        modelmap[model],
+        pk=pk
+    )
+
+
+    # ==============================
+    # HOD
+    # ==============================
+
+    if current_role == 'HOD':
+
+
+        # Own department only
+        if (
+            obj.student.department_id
+            != request.user.profile.department_id
+        ):
+
+            return HttpResponseForbidden(
+                'You cannot verify another department.'
+            )
+
+
+        if obj.status != 'PENDING':
+
+            return HttpResponseForbidden(
+                'Already processed.'
+            )
+
+
+        if decision == 'reject':
+
+            obj.status = 'REJECTED'
+
+            # Rejected evidence gets no score
+            if model == 'activity':
+                obj.points = 0
+
+            obj.save()
+
+
+        elif decision == 'approve':
+
+
+            # Student progress evidence
+            if model == 'activity':
+
+                try:
+
+                    level = int(
+                        request.POST.get(
+                            'level'
+                        )
+                    )
+
+                except:
+
+                    messages.error(
+                        request,
+                        'Please select a performance level.'
+                    )
+
+                    return redirect(
+                        'approvals'
+                    )
+
+
+                if level not in [
+                    0,
+                    1,
+                    2,
+                    3,
+                    4
+                ]:
+
+                    messages.error(
+                        request,
+                        'Invalid performance level.'
+                    )
+
+                    return redirect(
+                        'approvals'
+                    )
+
+
+                # Rubric midpoint calculation
+                ratios = {
+                    0: 0,
+                    1: 0.37,
+                    2: 0.62,
+                    3: 0.82,
+                    4: 0.95
+                }
+
+
+                obj.level = level
+
+                obj.points = round(
+
+                    obj.parameter.max_points
+                    * ratios[level],
+
+                    2
+                )
+
+
+            obj.status = 'HOD_APPROVED'
+
+            obj.save()
+
+
+        else:
+
+            return HttpResponseForbidden(
+                'Invalid decision.'
+            )
+
+
+    # ==============================
+    # IQAC
+    # ==============================
+
+    elif (
+        current_role == 'IQAC'
+        or request.user.is_superuser
+    ):
+
+        if obj.status != 'HOD_APPROVED':
+
+            return HttpResponseForbidden(
+                'HOD verification required first.'
+            )
+
+
+        if decision == 'approve':
+
+            obj.status = 'IQAC_APPROVED'
+
+        elif decision == 'reject':
+
+            obj.status = 'REJECTED'
+
+        else:
+
+            return HttpResponseForbidden(
+                'Invalid decision.'
+            )
+
+
+        obj.save()
+
+
+    else:
+
+        return HttpResponseForbidden(
+            'Not authorized.'
+        )
+
+
+    AuditLog.objects.create(
+
+        actor=request.user,
+
+        action=decision,
+
+        entity=model,
+
+        entity_id=str(pk),
+
+        details=obj.status
+    )
+
+
+    return redirect(
+        'approvals'
+    )
+
+@login_required
+def reports(request):
+    if role(request.user) not in [
+    'IQAC',
+    'HOD'
+] and not request.user.is_superuser:
+        return HttpResponseForbidden(
+        'Only IQAC and HOD can view reports.'
+    )
+    depts=Department.objects.filter(active=True); rows=[]
+    if role(request.user)!='IQAC' and not request.user.is_superuser:depts=depts.filter(id=request.user.profile.department_id)
+    for d in depts:
+        sts=Student.objects.filter(department=d,active=True); rows.append({'department':d,'students':sts.count(),'avg12':sts.aggregate(x=Avg('class12_percentage'))['x'] or 0,'avgcgpa':SemesterResult.objects.filter(student__in=sts,status='IQAC_APPROVED').aggregate(x=Avg('cgpa'))['x'] or 0})
+    return render(request,'core/reports.html',{'rows':rows})
