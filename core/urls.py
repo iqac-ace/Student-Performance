@@ -18,6 +18,7 @@ urlpatterns=[
     path('semester/add/',views.semester_add,name='semester_add'),
     path('activity/add/',views.activity_add,name='activity_add'),
     path('approvals/',views.approvals,name='approvals'),
+    path('reports/dashboard/download/',views.download_dashboard_report,name='download_dashboard_report'),
     path('approve/<str:model>/<int:pk>/<str:decision>/',views.approve,name='approve'),
     path('reports/',views.reports,name='reports'),
 ]

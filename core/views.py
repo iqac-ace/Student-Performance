@@ -9,6 +9,8 @@ from django.db.models import Avg,Count,Q
 from django.db import transaction
 from django.views.decorators.http import require_POST
 from openpyxl import load_workbook, Workbook
+from openpyxl.styles import Font, Alignment
+from datetime import datetime
 from .models import *
 from .forms import *
 from .utils import student_spi
@@ -378,6 +380,460 @@ def dashboard(request):
                 current_role
         }
     )   
+@login_required
+def download_dashboard_report(request):
+
+    current_role = role(request.user)
+
+    if request.user.is_superuser:
+        current_role = 'IQAC'
+
+    # Only IQAC and HOD
+    if current_role not in ['IQAC', 'HOD']:
+        return HttpResponseForbidden(
+            'You are not authorized to download this report.'
+        )
+
+
+    # ==========================================
+    # STUDENT SCOPE
+    # ==========================================
+
+    students = Student.objects.filter(
+        active=True
+    ).select_related(
+        'department'
+    )
+
+    if current_role == 'HOD':
+
+        students = students.filter(
+            department=request.user.profile.department
+        )
+
+
+    # ==========================================
+    # CREATE EXCEL FILE
+    # ==========================================
+
+    wb = Workbook()
+
+    ws = wb.active
+
+    ws.title = 'Dashboard Summary'
+
+
+    # ==========================================
+    # REPORT TITLE
+    # ==========================================
+
+    ws['A1'] = 'ADHIYAMAAN COLLEGE OF ENGINEERING, HOSUR'
+
+    ws['A2'] = 'ACE EduCampus - Student Performance Report'
+
+
+    if current_role == 'HOD':
+
+        department = request.user.profile.department
+
+        ws['A3'] = (
+            f'Department: '
+            f'{department.code} - {department.name}'
+        )
+
+    else:
+
+        ws['A3'] = 'Institution Level Report'
+
+
+    ws['A4'] = (
+        'Generated on: '
+        + datetime.now().strftime(
+            '%d-%m-%Y %I:%M %p'
+        )
+    )
+
+
+    for cell in ['A1', 'A2']:
+
+        ws[cell].font = Font(
+            bold=True,
+            size=14
+        )
+
+
+    # ==========================================
+    # DASHBOARD SUMMARY
+    # ==========================================
+
+    ws['A6'] = 'SUMMARY'
+
+    ws['A6'].font = Font(
+        bold=True,
+        size=12
+    )
+
+
+    total_students = students.count()
+
+
+    semester_results = SemesterResult.objects.filter(
+        student__in=students
+    )
+
+
+    activities = ActivityEvidence.objects.filter(
+        student__in=students
+    )
+
+
+    marks = SubjectMark.objects.filter(
+        student__in=students
+    )
+
+
+    avg_cgpa = semester_results.aggregate(
+        value=Avg('cgpa')
+    )['value'] or 0
+
+
+    avg_12 = students.aggregate(
+        value=Avg('class12_percentage')
+    )['value'] or 0
+
+
+    summary = [
+
+        ['Total Students', total_students],
+
+        [
+            'Total Semester Results',
+            semester_results.count()
+        ],
+
+        [
+            'Total Subject Mark Records',
+            marks.count()
+        ],
+
+        [
+            'Total Activities / Evidence',
+            activities.count()
+        ],
+
+        [
+            'Average 12th Percentage',
+            round(float(avg_12), 2)
+        ],
+
+        [
+            'Average CGPA',
+            round(float(avg_cgpa), 2)
+        ],
+    ]
+
+
+    row = 7
+
+    for label, value in summary:
+
+        ws.cell(
+            row=row,
+            column=1,
+            value=label
+        )
+
+        ws.cell(
+            row=row,
+            column=2,
+            value=value
+        )
+
+        row += 1
+
+
+    # ==========================================
+    # STUDENT DETAILS SHEET
+    # ==========================================
+
+    student_sheet = wb.create_sheet(
+        'Students'
+    )
+
+
+    headers = [
+
+        'Register Number',
+        'Student Name',
+        'Department',
+        'Batch',
+        'Current Semester',
+        '12th Percentage',
+        'Email',
+        'Phone',
+    ]
+
+
+    student_sheet.append(
+        headers
+    )
+
+
+    for cell in student_sheet[1]:
+
+        cell.font = Font(
+            bold=True
+        )
+
+        cell.alignment = Alignment(
+            horizontal='center'
+        )
+
+
+    for student in students:
+
+        student_sheet.append([
+
+            student.register_number,
+
+            student.name,
+
+            student.department.code
+            if student.department
+            else '',
+
+            student.batch,
+
+            student.current_semester,
+
+            student.class12_percentage,
+
+            student.email,
+
+            student.phone,
+        ])
+
+
+    # ==========================================
+    # SEMESTER RESULTS SHEET
+    # ==========================================
+
+    semester_sheet = wb.create_sheet(
+        'Semester Results'
+    )
+
+
+    semester_sheet.append([
+
+        'Register Number',
+        'Student',
+        'Department',
+        'Semester',
+        'SGPA',
+        'CGPA',
+        'Arrears',
+        'Status',
+    ])
+
+
+    for cell in semester_sheet[1]:
+
+        cell.font = Font(
+            bold=True
+        )
+
+
+    semester_results = semester_results.select_related(
+        'student',
+        'student__department'
+    ).order_by(
+        'student__register_number',
+        'semester'
+    )
+
+
+    for result in semester_results:
+
+        semester_sheet.append([
+
+            result.student.register_number,
+
+            result.student.name,
+
+            result.student.department.code
+            if result.student.department
+            else '',
+
+            result.semester,
+
+            result.sgpa,
+
+            result.cgpa,
+
+            result.arrears,
+
+            result.status,
+        ])
+
+
+    # ==========================================
+    # ACTIVITIES / PROGRESS SHEET
+    # ==========================================
+
+    activity_sheet = wb.create_sheet(
+        'Activities'
+    )
+
+
+    activity_sheet.append([
+
+        'Register Number',
+        'Student',
+        'Department',
+        'Framework Parameter',
+        'Activity',
+        'Level',
+        'Points',
+        'Status',
+    ])
+
+
+    for cell in activity_sheet[1]:
+
+        cell.font = Font(
+            bold=True
+        )
+
+
+    activities = activities.select_related(
+        'student',
+        'student__department',
+        'parameter'
+    )
+
+
+    for activity in activities:
+
+        activity_sheet.append([
+
+            activity.student.register_number,
+
+            activity.student.name,
+
+            activity.student.department.code
+            if activity.student.department
+            else '',
+
+            activity.parameter.name
+            if activity.parameter
+            else '',
+
+            activity.title,
+
+            activity.level,
+
+            activity.points,
+
+            activity.status,
+        ])
+
+
+    # ==========================================
+    # AUTO WIDTH
+    # ==========================================
+
+    for sheet in wb.worksheets:
+
+        for column in sheet.columns:
+
+            max_length = 0
+
+            column_letter = (
+                column[0].column_letter
+            )
+
+            for cell in column:
+
+                try:
+
+                    length = len(
+                        str(
+                            cell.value
+                            if cell.value is not None
+                            else ''
+                        )
+                    )
+
+                    if length > max_length:
+                        max_length = length
+
+                except:
+                    pass
+
+            sheet.column_dimensions[
+                column_letter
+            ].width = min(
+                max_length + 3,
+                40
+            )
+
+
+    # ==========================================
+    # FILE NAME
+    # ==========================================
+
+    today = datetime.now().strftime(
+        '%Y-%m-%d'
+    )
+
+
+    if current_role == 'HOD':
+
+        code = (
+            request.user.profile.department.code
+        )
+
+        filename = (
+            f'ACE_EduCampus_'
+            f'{code}_Report_{today}.xlsx'
+        )
+
+    else:
+
+        filename = (
+            f'ACE_EduCampus_'
+            f'IQAC_Report_{today}.xlsx'
+        )
+
+
+    # ==========================================
+    # DOWNLOAD
+    # ==========================================
+
+    response = HttpResponse(
+        content_type=(
+            'application/'
+            'vnd.openxmlformats-officedocument.'
+            'spreadsheetml.sheet'
+        )
+    )
+
+
+    response[
+        'Content-Disposition'
+    ] = (
+        f'attachment; '
+        f'filename="{filename}"'
+    )
+
+
+    wb.save(
+        response
+    )
+
+
+    return response
+
 @login_required
 def students(request):
 
