@@ -7,11 +7,11 @@ from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import render,redirect,get_object_or_404
 from django.db.models import Avg,Count,Q
 from django.db import transaction
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 from openpyxl import load_workbook, Workbook
 from openpyxl.styles import Font, Alignment
 from datetime import datetime
-from django.utils import timezone
 from .models import *
 from .forms import *
 from .utils import student_spi
