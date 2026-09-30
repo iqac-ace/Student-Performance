@@ -336,6 +336,16 @@ class StudentProgressForm(forms.ModelForm):
             *args,
             **kwargs
         )
+        # Show maximum weightage in parameter dropdown
+        if 'parameter' in self.fields:
+
+            self.fields[
+                'parameter'
+            ].label_from_instance = lambda obj: (
+                f"{obj.category_code}. "
+                f"{obj.name} "
+                f"— {obj.max_points} Points"
+            )
 
         if not user:
             return
