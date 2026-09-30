@@ -217,22 +217,52 @@ class StaffCreateForm(forms.Form):
         help_text='Select only when creating a Student login.'
     )
 class StudentProgressForm(forms.ModelForm):
+
+    # We control these requirements dynamically
+    title = forms.CharField(
+        required=False,
+        widget=forms.TextInput(
+            attrs={
+                'class': 'form-control'
+            }
+        )
+    )
+
+    activity_date = forms.DateField(
+        required=False,
+        widget=forms.DateInput(
+            attrs={
+                'type': 'date',
+                'class': 'form-control'
+            }
+        )
+    )
+
+
     class Meta:
+
         model = ActivityEvidence
 
         fields = [
+            'student',
             'parameter',
             'title',
             'activity_date',
-            'evidence',
+            'board',
+            'school',
+            'academic_year',
+            'academic_group',
+            'marks_obtained',
+            'maximum_marks',
             'remarks',
         ]
 
+
         widgets = {
-            'activity_date': forms.DateInput(
+
+            'student': forms.Select(
                 attrs={
-                    'type': 'date',
-                    'class': 'form-control'
+                    'class': 'form-select'
                 }
             ),
 
@@ -242,9 +272,47 @@ class StudentProgressForm(forms.ModelForm):
                 }
             ),
 
-            'title': forms.TextInput(
+            'board': forms.TextInput(
                 attrs={
-                    'class': 'form-control'
+                    'class': 'form-control',
+                    'placeholder': 'Example: State Board / CBSE'
+                }
+            ),
+
+            'school': forms.TextInput(
+                attrs={
+                    'class': 'form-control',
+                    'placeholder': 'School name'
+                }
+            ),
+
+            'academic_year': forms.TextInput(
+                attrs={
+                    'class': 'form-control',
+                    'placeholder': 'Example: 2023-2024'
+                }
+            ),
+
+            'academic_group': forms.TextInput(
+                attrs={
+                    'class': 'form-control',
+                    'placeholder': 'Example: Maths Biology'
+                }
+            ),
+
+            'marks_obtained': forms.NumberInput(
+                attrs={
+                    'class': 'form-control',
+                    'step': '0.01',
+                    'min': '0'
+                }
+            ),
+
+            'maximum_marks': forms.NumberInput(
+                attrs={
+                    'class': 'form-control',
+                    'step': '0.01',
+                    'min': '1'
                 }
             ),
 
@@ -256,53 +324,208 @@ class StudentProgressForm(forms.ModelForm):
             ),
         }
 
-    def clean_username(self):
 
-        username = self.cleaned_data['username'].strip()
+    def __init__(
+        self,
+        *args,
+        user=None,
+        **kwargs
+    ):
 
-        if User.objects.filter(
-            username__iexact=username
-        ).exists():
+        super().__init__(
+            *args,
+            **kwargs
+        )
 
-            raise forms.ValidationError(
-                'This username already exists.'
+        if not user:
+            return
+
+
+        if user.is_superuser:
+
+            current_role = 'IQAC'
+
+        else:
+
+            current_role = getattr(
+                user.profile,
+                'role',
+                ''
             )
 
-        return username
+
+        # ======================================
+        # STUDENT
+        # ======================================
+
+        if current_role == 'STUDENT':
+
+            self.fields[
+                'student'
+            ].required = False
+
+            self.fields[
+                'student'
+            ].widget = forms.HiddenInput()
+
+
+        # ======================================
+        # HOD / FACULTY
+        # ======================================
+
+        elif current_role in [
+            'HOD',
+            'FACULTY'
+        ]:
+
+            self.fields[
+                'student'
+            ].queryset = (
+                Student.objects.filter(
+                    department=user.profile.department,
+                    active=True
+                ).order_by(
+                    'register_number'
+                )
+            )
+
+
+        # ======================================
+        # IQAC
+        # ======================================
+
+        else:
+
+            self.fields[
+                'student'
+            ].queryset = (
+                Student.objects.filter(
+                    active=True
+                ).select_related(
+                    'department'
+                ).order_by(
+                    'department__code',
+                    'register_number'
+                )
+            )
+
 
     def clean(self):
 
         cleaned = super().clean()
 
-        selected_role = cleaned.get('role')
-        department = cleaned.get('department')
-        student = cleaned.get('student')
+        parameter = cleaned.get(
+            'parameter'
+        )
 
-        if selected_role in ['HOD', 'FACULTY']:
 
-            if not department:
+        parameter_text = (
+            str(parameter).lower()
+            if parameter
+            else ''
+        )
+
+
+        is_plus2 = (
+            '+2 academic performance'
+            in parameter_text
+        )
+
+
+        # ======================================
+        # +2 ACADEMIC PERFORMANCE
+        # ======================================
+
+        if is_plus2:
+
+            required_fields = {
+
+                'board':
+                    'Board is required.',
+
+                'school':
+                    'School is required.',
+
+                'academic_year':
+                    'Academic year is required.',
+
+                'academic_group':
+                    'Group is required.',
+
+                'marks_obtained':
+                    'Marks obtained is required.',
+
+                'maximum_marks':
+                    'Maximum marks is required.',
+
+            }
+
+
+            for field, message in (
+                required_fields.items()
+            ):
+
+                if not cleaned.get(field):
+
+                    self.add_error(
+                        field,
+                        message
+                    )
+
+
+            obtained = cleaned.get(
+                'marks_obtained'
+            )
+
+            maximum = cleaned.get(
+                'maximum_marks'
+            )
+
+
+            if (
+                obtained is not None
+                and maximum is not None
+            ):
+
+                if maximum <= 0:
+
+                    self.add_error(
+                        'maximum_marks',
+                        'Maximum marks must be greater than zero.'
+                    )
+
+                elif obtained > maximum:
+
+                    self.add_error(
+                        'marks_obtained',
+                        'Marks obtained cannot exceed maximum marks.'
+                    )
+
+
+        # ======================================
+        # OTHER ACTIVITIES
+        # ======================================
+
+        else:
+
+            if not cleaned.get(
+                'title'
+            ):
 
                 self.add_error(
-                    'department',
-                    'Department is required.'
+                    'title',
+                    'Activity title is required.'
                 )
 
-        if selected_role == 'STUDENT':
 
-            if not student:
+            if not cleaned.get(
+                'activity_date'
+            ):
 
                 self.add_error(
-                    'student',
-                    'Select the student for this login.'
+                    'activity_date',
+                    'Activity date is required.'
                 )
 
-            elif Profile.objects.filter(
-                student=student
-            ).exists():
-
-                self.add_error(
-                    'student',
-                    'This student already has a login account.'
-                )
 
         return cleaned

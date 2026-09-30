@@ -11,6 +11,7 @@ from django.views.decorators.http import require_POST
 from openpyxl import load_workbook, Workbook
 from openpyxl.styles import Font, Alignment
 from datetime import datetime
+from django.utils import timezone
 from .models import *
 from .forms import *
 from .utils import student_spi
@@ -1200,48 +1201,175 @@ def student_add(request):
 @login_required
 def student_progress_upload(request):
 
-    if role(request.user) != 'STUDENT':
-
-        return HttpResponseForbidden(
-            'Student access only.'
-        )
-
-
-    student = request.user.profile.student
-
-
-    if not student:
-
-        return HttpResponseForbidden(
-            'Your login is not linked to a student record.'
-        )
-
-
-    form = StudentProgressForm(
-        request.POST or None,
-        request.FILES or None
+    current_role = role(
+        request.user
     )
 
 
-    if form.is_valid():
+    if request.user.is_superuser:
+
+        current_role = 'IQAC'
+
+
+    # ==========================================
+    # ALLOWED USERS
+    # ==========================================
+
+    if current_role not in [
+        'IQAC',
+        'HOD',
+        'FACULTY',
+        'STUDENT'
+    ]:
+
+        return HttpResponseForbidden(
+            'Not authorized.'
+        )
+
+
+    # ==========================================
+    # STUDENT LOGIN
+    # ==========================================
+
+    own_student = None
+
+
+    if current_role == 'STUDENT':
+
+        own_student = (
+            request.user.profile.student
+        )
+
+
+        if not own_student:
+
+            return HttpResponseForbidden(
+                'Your login is not linked '
+                'to a student record.'
+            )
+
+
+    # ==========================================
+    # FORM
+    # ==========================================
+
+    form = StudentProgressForm(
+        request.POST or None,
+        request.FILES or None,
+        user=request.user
+    )
+
+
+    # Preselect student when staff opens
+    # from student profile
+
+    selected_student_id = (
+        request.GET.get('student')
+    )
+
+
+    if (
+        request.method == 'GET'
+        and selected_student_id
+        and current_role != 'STUDENT'
+    ):
+
+        if form.fields[
+            'student'
+        ].queryset.filter(
+            id=selected_student_id
+        ).exists():
+
+            form.fields[
+                'student'
+            ].initial = (
+                selected_student_id
+            )
+
+
+    # ==========================================
+    # SAVE
+    # ==========================================
+
+    if request.method == 'POST' and form.is_valid():
 
         progress = form.save(
             commit=False
         )
 
-        # Always force logged-in student
-        progress.student = student
+
+        # Student can upload only own record
+        if current_role == 'STUDENT':
+
+            progress.student = (
+                own_student
+            )
+
+
+        else:
+
+            progress.student = (
+                form.cleaned_data[
+                    'student'
+                ]
+            )
+
+
+        # Additional security for HOD/Faculty
+
+        if current_role in [
+            'HOD',
+            'FACULTY'
+        ]:
+
+            if (
+                progress.student.department_id
+                !=
+                request.user.profile.department_id
+            ):
+
+                return HttpResponseForbidden(
+                    'You cannot add progress '
+                    'for another department.'
+                )
+
+
+        # ======================================
+        # +2 ACADEMIC PERFORMANCE
+        # ======================================
+
+        if (
+            progress.parameter
+            and '+2 academic performance'
+            in str(
+                progress.parameter
+            ).lower()
+        ):
+
+            progress.title = (
+                '+2 Academic Performance'
+            )
+
+            if not progress.activity_date:
+
+                progress.activity_date = (
+                    timezone.localdate()
+                )
+
 
         progress.created_by = (
             request.user
         )
 
-        # Student cannot assign score
+
+        # Score is never entered by student/staff
         progress.level = 0
         progress.points = 0
 
-        # Must be verified by HOD
+
+        # HOD must verify
         progress.status = 'PENDING'
+
 
         progress.save()
 
@@ -1250,7 +1378,7 @@ def student_progress_upload(request):
 
             actor=request.user,
 
-            action='Student progress uploaded',
+            action='Progress submitted',
 
             entity='ActivityEvidence',
 
@@ -1258,32 +1386,35 @@ def student_progress_upload(request):
                 progress.id
             ),
 
-            details=progress.title
+            details=(
+                f'{progress.student.register_number} - '
+                f'{progress.title}'
+            )
         )
 
 
         messages.success(
             request,
-            'Progress uploaded successfully. '
+            'Progress submitted successfully. '
             'Waiting for HOD verification.'
         )
 
 
         return redirect(
             'student_detail',
-            pk=student.id
+            pk=progress.student.id
         )
 
 
     return render(
         request,
-        'core/form.html',
+        'core/progress_upload.html',
         {
             'form': form,
-            'title': 'Upload My Progress'
+            'role': current_role,
+            'own_student': own_student,
         }
     )
-
 @login_required
 def student_edit(request, pk):
     # Only IQAC and HOD can edit student details

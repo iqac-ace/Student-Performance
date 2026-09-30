@@ -1,0 +1,558 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+
+<div class="container-fluid">
+
+    <div class="mb-4">
+
+        <h2>
+            Upload / Add Student Progress
+        </h2>
+
+        <p class="text-muted">
+            Add academic and co-curricular
+            performance evidence.
+        </p>
+
+    </div>
+
+
+    <form
+        method="post"
+        enctype="multipart/form-data"
+    >
+
+        {% csrf_token %}
+
+
+        <!-- STUDENT -->
+
+        {% if role != 'STUDENT' %}
+
+        <div class="card border-0 shadow-sm mb-4">
+
+            <div class="card-body">
+
+                <label class="form-label fw-semibold">
+                    Student
+                </label>
+
+                {{ form.student }}
+
+                {% for error in form.student.errors %}
+
+                <div class="text-danger small">
+                    {{ error }}
+                </div>
+
+                {% endfor %}
+
+            </div>
+
+        </div>
+
+        {% else %}
+
+            {{ form.student }}
+
+            <div class="alert alert-light border">
+
+                <strong>Student:</strong>
+                {{ own_student.name }}
+
+                <br>
+
+                <strong>Register No:</strong>
+                {{ own_student.register_number }}
+
+            </div>
+
+        {% endif %}
+
+
+
+        <!-- PARAMETER -->
+
+        <div class="card border-0 shadow-sm mb-4">
+
+            <div class="card-body">
+
+                <label class="form-label fw-semibold">
+                    Parameter
+                </label>
+
+                {{ form.parameter }}
+
+                {% for error in form.parameter.errors %}
+
+                <div class="text-danger small">
+                    {{ error }}
+                </div>
+
+                {% endfor %}
+
+            </div>
+
+        </div>
+
+
+
+        <!-- ================================= -->
+        <!-- +2 ACADEMIC PERFORMANCE -->
+        <!-- ================================= -->
+
+        <div
+            id="academicPerformanceSection"
+            class="card border-0 shadow-sm mb-4"
+            style="display:none;"
+        >
+
+            <div class="card-header bg-white">
+
+                <h4 class="mb-1">
+                    A. +2 Academic Performance
+                </h4>
+
+                <div class="text-muted">
+                    Maximum Weightage: 20 Points
+                </div>
+
+            </div>
+
+
+            <div class="card-body">
+
+                <h5 class="mb-3">
+                    Academic Details
+                </h5>
+
+
+                <div class="row g-3">
+
+
+                    <!-- BOARD -->
+
+                    <div class="col-md-6">
+
+                        <label class="form-label">
+                            Board
+                        </label>
+
+                        {{ form.board }}
+
+                        {% for error in form.board.errors %}
+
+                        <div class="text-danger small">
+                            {{ error }}
+                        </div>
+
+                        {% endfor %}
+
+                    </div>
+
+
+
+                    <!-- SCHOOL -->
+
+                    <div class="col-md-6">
+
+                        <label class="form-label">
+                            School
+                        </label>
+
+                        {{ form.school }}
+
+                        {% for error in form.school.errors %}
+
+                        <div class="text-danger small">
+                            {{ error }}
+                        </div>
+
+                        {% endfor %}
+
+                    </div>
+
+
+
+                    <!-- YEAR -->
+
+                    <div class="col-md-6">
+
+                        <label class="form-label">
+                            Year
+                        </label>
+
+                        {{ form.academic_year }}
+
+                        {% for error in form.academic_year.errors %}
+
+                        <div class="text-danger small">
+                            {{ error }}
+                        </div>
+
+                        {% endfor %}
+
+                    </div>
+
+
+
+                    <!-- GROUP -->
+
+                    <div class="col-md-6">
+
+                        <label class="form-label">
+                            Group
+                        </label>
+
+                        {{ form.academic_group }}
+
+                        {% for error in form.academic_group.errors %}
+
+                        <div class="text-danger small">
+                            {{ error }}
+                        </div>
+
+                        {% endfor %}
+
+                    </div>
+
+
+
+                    <!-- MARKS -->
+
+                    <div class="col-md-4">
+
+                        <label class="form-label">
+                            Marks Obtained
+                        </label>
+
+                        {{ form.marks_obtained }}
+
+                        {% for error in form.marks_obtained.errors %}
+
+                        <div class="text-danger small">
+                            {{ error }}
+                        </div>
+
+                        {% endfor %}
+
+                    </div>
+
+
+
+                    <!-- MAXIMUM -->
+
+                    <div class="col-md-4">
+
+                        <label class="form-label">
+                            Maximum Marks
+                        </label>
+
+                        {{ form.maximum_marks }}
+
+                        {% for error in form.maximum_marks.errors %}
+
+                        <div class="text-danger small">
+                            {{ error }}
+                        </div>
+
+                        {% endfor %}
+
+                    </div>
+
+
+
+                    <!-- PERCENTAGE -->
+
+                    <div class="col-md-4">
+
+                        <label class="form-label">
+                            Percentage
+                        </label>
+
+                        <input
+                            id="percentagePreview"
+                            type="text"
+                            class="form-control"
+                            readonly
+                            placeholder="Automatic"
+                        >
+
+                    </div>
+
+                </div>
+
+
+                <hr class="my-4">
+
+
+
+            </div>
+
+        </div>
+
+
+
+        <!-- ================================= -->
+        <!-- NORMAL ACTIVITY SECTION -->
+        <!-- ================================= -->
+
+        <div
+            id="normalActivitySection"
+            class="card border-0 shadow-sm mb-4"
+        >
+
+            <div class="card-body">
+
+                <div class="row g-3">
+
+
+                    <div class="col-md-8">
+
+                        <label class="form-label">
+                            Activity Title
+                        </label>
+
+                        {{ form.title }}
+
+                        {% for error in form.title.errors %}
+
+                        <div class="text-danger small">
+                            {{ error }}
+                        </div>
+
+                        {% endfor %}
+
+                    </div>
+
+
+                    <div class="col-md-4">
+
+                        <label class="form-label">
+                            Activity Date
+                        </label>
+
+                        {{ form.activity_date }}
+
+                    </div>
+
+
+                    <div class="col-12">
+
+                        <label class="form-label">
+                            Supporting Evidence
+                        </label>
+
+                        {{ form.evidence }}
+
+                    </div>
+
+
+                    <div class="col-12">
+
+                        <label class="form-label">
+                            Remarks
+                        </label>
+
+                        {{ form.remarks }}
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+
+        <button
+            type="submit"
+            class="btn btn-primary btn-lg"
+        >
+
+            <i class="bi bi-send me-1"></i>
+
+            Submit for HOD Verification
+
+        </button>
+
+    </form>
+
+</div>
+
+
+
+<script>
+
+document.addEventListener(
+    'DOMContentLoaded',
+    function () {
+
+        const parameter =
+            document.getElementById(
+                'id_parameter'
+            );
+
+        const academicSection =
+            document.getElementById(
+                'academicPerformanceSection'
+            );
+
+        const normalSection =
+            document.getElementById(
+                'normalActivitySection'
+            );
+
+        const marks =
+            document.getElementById(
+                'id_marks_obtained'
+            );
+
+        const maximum =
+            document.getElementById(
+                'id_maximum_marks'
+            );
+
+        const percentage =
+            document.getElementById(
+                'percentagePreview'
+            );
+
+
+        function isAcademicPerformance() {
+
+            if (!parameter) {
+                return false;
+            }
+
+            const selected =
+                parameter.options[
+                    parameter.selectedIndex
+                ];
+
+            if (!selected) {
+                return false;
+            }
+
+            return selected.text
+                .toLowerCase()
+                .includes(
+                    '+2 academic performance'
+                );
+        }
+
+
+        function updateSections() {
+
+            const academic =
+                isAcademicPerformance();
+
+
+            if (academic) {
+
+                academicSection.style.display =
+                    'block';
+
+                normalSection.style.display =
+                    'none';
+
+            }
+
+            else {
+
+                academicSection.style.display =
+                    'none';
+
+                normalSection.style.display =
+                    'block';
+
+            }
+
+        }
+
+
+        function calculatePercentage() {
+
+            const obtained =
+                parseFloat(
+                    marks?.value
+                );
+
+            const max =
+                parseFloat(
+                    maximum?.value
+                );
+
+
+            if (
+                !isNaN(obtained)
+                &&
+                !isNaN(max)
+                &&
+                max > 0
+            ) {
+
+                percentage.value =
+                    (
+                        obtained
+                        /
+                        max
+                        *
+                        100
+                    ).toFixed(2)
+                    + '%';
+
+            }
+
+            else {
+
+                percentage.value = '';
+
+            }
+
+        }
+
+
+        if (parameter) {
+
+            parameter.addEventListener(
+                'change',
+                updateSections
+            );
+
+        }
+
+
+        if (marks) {
+
+            marks.addEventListener(
+                'input',
+                calculatePercentage
+            );
+
+        }
+
+
+        if (maximum) {
+
+            maximum.addEventListener(
+                'input',
+                calculatePercentage
+            );
+
+        }
+
+
+        updateSections();
+
+        calculatePercentage();
+
+    }
+);
+
+</script>
+
+
+{% endblock %}

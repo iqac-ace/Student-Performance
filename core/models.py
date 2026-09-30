@@ -119,6 +119,80 @@ class ActivityEvidence(models.Model):
     status=models.CharField(max_length=15,choices=STATUS,default='PENDING')
     created_by=models.ForeignKey(User,on_delete=models.SET_NULL,null=True)
     created_at=models.DateTimeField(auto_now_add=True)
+    # ==========================================
+    # +2 ACADEMIC PERFORMANCE DETAILS
+    # ==========================================
+
+    board = models.CharField(
+        max_length=150,
+        blank=True
+    )
+
+    school = models.CharField(
+        max_length=250,
+        blank=True
+    )
+
+    academic_year = models.CharField(
+        max_length=20,
+        blank=True
+    )
+
+    academic_group = models.CharField(
+        max_length=100,
+        blank=True
+    )
+
+    marks_obtained = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
+
+    maximum_marks = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
+
+    percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
+    @property
+    def is_plus2_academic(self):
+
+        if not self.parameter:
+            return False
+
+        return (
+            '+2 academic performance'
+            in str(self.parameter).lower()
+        )
+    def save(self, *args, **kwargs):
+
+        if (
+            self.marks_obtained is not None
+            and self.maximum_marks
+            and self.maximum_marks > 0
+        ):
+
+            self.percentage = round(
+                (
+                    self.marks_obtained
+                    / self.maximum_marks
+                ) * 100,
+                2
+            )
+
+        super().save(
+            *args,
+            **kwargs
+        )
 
 class AuditLog(models.Model):
     actor=models.ForeignKey(User,on_delete=models.SET_NULL,null=True)
