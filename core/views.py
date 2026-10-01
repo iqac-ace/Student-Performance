@@ -1,3 +1,4 @@
+import json
 from decimal import Decimal, InvalidOperation
 import os
 from django.contrib.auth.decorators import login_required
@@ -12,12 +13,14 @@ from django.views.decorators.http import require_POST
 from openpyxl import load_workbook, Workbook
 from openpyxl.styles import Font, Alignment
 from datetime import datetime
+from datetime import timedelta 
 from .models import *
 from .forms import *
 from .utils import student_spi
-from .models import (Profile,Department,Student,AuditLog,)
+from .models import (Profile,Department,Student,AuditLog,ProgressSubmission, ScoreParameter)
 from .forms import StaffCreateForm
-from .forms import (StudentForm,SubjectForm,SemesterResultForm,ActivityForm,ExcelUploadForm,StaffCreateForm,StudentProgressForm,)
+from .scoring import (calculate_submission_points, student_scorecard)
+from .forms import (StudentForm,SubjectForm,SemesterResultForm,ActivityForm,ExcelUploadForm,StaffCreateForm,StudentProgressForm,ProgressSubmissionForm)
 
 def role(user):
 
@@ -29,6 +32,14 @@ def role(user):
     except Profile.DoesNotExist:
         return None
 
+def current_academic_year():
+
+    today = timezone.localdate()
+
+    if today.month >= 6:
+        return f"{today.year}-{today.year + 1}"
+
+    return f"{today.year - 1}-{today.year}"
 
 def dept_scope(user, qs):
 
@@ -1122,7 +1133,16 @@ def student_detail(request, pk):
         }
         for r in semesters
     ]
-
+    academic_year = (
+    request.GET.get(
+        'academic_year'
+    )
+    or current_academic_year()
+    )
+    scorecard = student_scorecard(
+        s,
+        academic_year
+        )
     return render(
         request,
         'core/student_detail.html',
@@ -1134,7 +1154,11 @@ def student_detail(request, pk):
             'scores': scores,
             'spi': total,
             'level': level,
-            'trend': trend
+            'trend': trend,
+            'student': s,
+            'scorecard': scorecard,
+            'academic_year': academic_year,
+
         }
     )
 @login_required
@@ -1145,7 +1169,6 @@ def student_add(request):
     if current_role not in [
         'IQAC',
         'HOD',
-        'FACULTY'
     ] and not request.user.is_superuser:
 
         return HttpResponseForbidden(
@@ -1199,220 +1222,107 @@ def student_add(request):
         }
     )
 @login_required
-def student_progress_upload(request):
+def student_progress_upload(
+    request
+):
 
-    current_role = role(
+    if portal_role(
         request.user
-    )
-
-
-    if request.user.is_superuser:
-
-        current_role = 'IQAC'
-
-
-    # ==========================================
-    # ALLOWED USERS
-    # ==========================================
-
-    if current_role not in [
-        'IQAC',
-        'HOD',
-        'FACULTY',
-        'STUDENT'
-    ]:
+    ) != 'STUDENT':
 
         return HttpResponseForbidden(
-            'Not authorized.'
+            'Only students can submit progress.'
         )
 
 
-    # ==========================================
-    # STUDENT LOGIN
-    # ==========================================
-
-    own_student = None
-
-
-    if current_role == 'STUDENT':
-
-        own_student = (
-            request.user.profile.student
-        )
-
-
-        if not own_student:
-
-            return HttpResponseForbidden(
-                'Your login is not linked '
-                'to a student record.'
-            )
-
-
-    # ==========================================
-    # FORM
-    # ==========================================
-
-    form = StudentProgressForm(
-        request.POST or None,
-        request.FILES or None,
-        user=request.user
+    profile = (
+        request.user.profile
     )
 
 
-    # Preselect student when staff opens
-    # from student profile
+    student = getattr(
+        profile,
+        'student',
+        None
+    )
 
-    selected_student_id = (
-        request.GET.get('student')
+
+    if not student:
+
+        return HttpResponseForbidden(
+            'This login is not linked '
+            'to a student record.'
+        )
+
+
+    form = ProgressSubmissionForm(
+        request.POST or None,
+        request.FILES or None
     )
 
 
     if (
-        request.method == 'GET'
-        and selected_student_id
-        and current_role != 'STUDENT'
+        request.method == 'POST'
+        and form.is_valid()
     ):
 
-        if form.fields[
-            'student'
-        ].queryset.filter(
-            id=selected_student_id
-        ).exists():
-
-            form.fields[
-                'student'
-            ].initial = (
-                selected_student_id
-            )
-
-
-    # ==========================================
-    # SAVE
-    # ==========================================
-
-    if request.method == 'POST' and form.is_valid():
-
-        progress = form.save(
-            commit=False
-        )
-
-
-        # Student can upload only own record
-        if current_role == 'STUDENT':
-
-            progress.student = (
-                own_student
-            )
-
-
-        else:
-
-            progress.student = (
-                form.cleaned_data[
-                    'student'
-                ]
-            )
-
-
-        # Additional security for HOD/Faculty
-
-        if current_role in [
-            'HOD',
-            'FACULTY'
-        ]:
-
-            if (
-                progress.student.department_id
-                !=
-                request.user.profile.department_id
-            ):
-
-                return HttpResponseForbidden(
-                    'You cannot add progress '
-                    'for another department.'
-                )
-
-
-        # ======================================
-        # +2 ACADEMIC PERFORMANCE
-        # ======================================
-
-        if (
-            progress.parameter
-            and '+2 academic performance'
-            in str(
-                progress.parameter
-            ).lower()
-        ):
-
-            progress.title = (
-                '+2 Academic Performance'
-            )
-
-            if not progress.activity_date:
-
-                progress.activity_date = (
-                    timezone.localdate()
-                )
-
-
-        progress.created_by = (
-            request.user
-        )
-
-
-        # Score is never entered by student/staff
-        progress.level = 0
-        progress.points = 0
-
-
-        # HOD must verify
-        progress.status = 'PENDING'
-
-
-        progress.save()
-
-
-        AuditLog.objects.create(
-
-            actor=request.user,
-
-            action='Progress submitted',
-
-            entity='ActivityEvidence',
-
-            entity_id=str(
-                progress.id
-            ),
-
-            details=(
-                f'{progress.student.register_number} - '
-                f'{progress.title}'
+        submission = (
+            form.save(
+                commit=False
             )
         )
+
+
+        submission.student = (
+            student
+        )
+
+        submission.status = (
+            'PENDING'
+        )
+
+        submission.awarded_points = 0
+
+        submission.save()
 
 
         messages.success(
             request,
             'Progress submitted successfully. '
-            'Waiting for HOD verification.'
+            'It is waiting for HOD verification.'
         )
 
 
         return redirect(
-            'student_detail',
-            pk=progress.student.id
+            'student_scorecard'
         )
+
+
+    parameter_codes = {
+
+        str(parameter.id):
+            parameter.code
+
+        for parameter
+        in ScoreParameter.objects.filter(
+            active=True
+        )
+    }
 
 
     return render(
         request,
         'core/progress_upload.html',
         {
+
             'form': form,
-            'role': current_role,
-            'own_student': own_student,
+
+            'student': student,
+
+            'parameter_codes_json':
+                json.dumps(
+                    parameter_codes
+                ),
         }
     )
 @login_required
@@ -1506,18 +1416,12 @@ def staff_add(request):
         'IQAC': [
             'IQAC',
             'HOD',
-            'FACULTY',
             'STUDENT',
         ],
 
         'HOD': [
-            'FACULTY',
             'STUDENT',
-        ],
-
-        'FACULTY': [
-            'STUDENT',
-        ],
+        ]
     }
 
 
@@ -1545,7 +1449,6 @@ def staff_add(request):
     role_labels = {
         'IQAC': 'IQAC Coordinator',
         'HOD': 'Head of Department',
-        'FACULTY': 'Faculty',
         'STUDENT': 'Student',
     }
 
@@ -2623,6 +2526,399 @@ def approvals(request):
     return render(request,'core/approvals.html',{'activities':activities.select_related('student','parameter'),'semesters':semesters.select_related('student'),'marks':marks.select_related('student','subject'),'role':r})
 
 @login_required
+def progress_approvals(
+    request
+):
+
+    if portal_role(
+        request.user
+    ) != 'HOD':
+
+        return HttpResponseForbidden(
+            'HOD access only.'
+        )
+
+
+    department_id = (
+        request.user
+        .profile
+        .department_id
+    )
+
+
+    submissions = (
+        ProgressSubmission.objects
+        .filter(
+            student__department_id=
+                department_id,
+            status='PENDING'
+        )
+        .select_related(
+            'student',
+            'student__department',
+            'parameter'
+        )
+        .order_by(
+            'created_at'
+        )
+    )
+
+
+    return render(
+        request,
+        'core/progress_approvals.html',
+        {
+            'submissions':
+                submissions
+        }
+    )
+
+@login_required
+def delete_progress_submission(
+    request,
+    pk
+):
+
+    if portal_role(
+        request.user
+    ) != 'STUDENT':
+
+        return HttpResponseForbidden(
+            'Student access only.'
+        )
+
+
+    submission = get_object_or_404(
+        ProgressSubmission,
+        pk=pk,
+        student__user=request.user
+    )
+
+
+    # Only pending submission can be deleted
+    if submission.status != 'PENDING':
+
+        messages.error(
+            request,
+            'Verified or rejected records '
+            'cannot be deleted here.'
+        )
+
+        return redirect(
+            'student_scorecard'
+        )
+
+
+    # Only within first 24 hours
+    expiry_time = (
+        submission.created_at
+        + timedelta(hours=24)
+    )
+
+
+    if timezone.now() > expiry_time:
+
+        messages.error(
+            request,
+            'The 24-hour deletion period '
+            'has expired.'
+        )
+
+        return redirect(
+            'student_scorecard'
+        )
+
+
+    if request.method == 'POST':
+
+        # Delete actual uploaded file
+        if submission.evidence:
+
+            submission.evidence.delete(
+                save=False
+            )
+
+
+        submission.delete()
+
+
+        messages.success(
+            request,
+            'Submission and evidence '
+            'deleted successfully.'
+        )
+
+
+    return redirect(
+        'student_scorecard'
+    )
+@login_required
+def verify_progress(
+    request,
+    pk,
+    decision
+):
+
+    if (
+        portal_role(
+            request.user
+        ) != 'HOD'
+        or request.method != 'POST'
+    ):
+
+        return HttpResponseForbidden(
+            'Not authorized.'
+        )
+
+
+    submission = (
+        get_object_or_404(
+            ProgressSubmission,
+            pk=pk
+        )
+    )
+
+
+    hod_department = (
+        request.user
+        .profile
+        .department_id
+    )
+
+
+    if (
+        submission.student.department_id
+        != hod_department
+    ):
+
+        return HttpResponseForbidden(
+            'You cannot verify another '
+            'department record.'
+        )
+
+
+    remarks = (
+        request.POST.get(
+            'verification_remarks',
+            ''
+        ).strip()
+    )
+
+
+    if decision == 'approve':
+
+        points = (
+            calculate_submission_points(
+                submission
+            )
+        )
+
+
+        # Security check:
+        # never exceed parameter maximum.
+        points = min(
+            points,
+            submission.parameter.max_points
+        )
+
+
+        submission.awarded_points = (
+            points
+        )
+
+        submission.status = (
+            'HOD_APPROVED'
+        )
+
+
+    elif decision == 'reject':
+
+        submission.awarded_points = 0
+
+        submission.status = (
+            'REJECTED'
+        )
+
+
+    else:
+
+        return HttpResponseForbidden(
+            'Invalid decision.'
+        )
+
+
+    submission.verification_remarks = (
+        remarks
+    )
+
+    submission.verified_by = (
+        request.user
+    )
+
+    submission.verified_at = (
+        timezone.now()
+    )
+
+    submission.save()
+
+
+    return redirect(
+        'progress_approvals'
+    )
+@login_required
+def student_scorecard_view(
+    request
+):
+
+    if portal_role(
+        request.user
+    ) != 'STUDENT':
+
+        return HttpResponseForbidden(
+            'Student access only.'
+        )
+
+
+    student = (
+        request.user
+        .profile
+        .student
+    )
+
+
+    academic_year = (
+        request.GET.get(
+            'academic_year'
+        )
+        or
+        ProgressSubmission.objects
+        .filter(
+            student=student
+        )
+        .order_by(
+            '-academic_year'
+        )
+        .values_list(
+            'academic_year',
+            flat=True
+        )
+        .first()
+        or '2026-2027'
+    )
+
+
+    scorecard = (
+        student_scorecard(
+            student,
+            academic_year
+        )
+    )
+
+
+    submissions = (
+        ProgressSubmission.objects
+        .filter(
+            student=student,
+            academic_year=
+                academic_year
+        )
+        .select_related(
+            'parameter'
+        )
+    )
+
+
+    return render(
+        request,
+        'core/student_scorecard.html',
+        {
+
+            'student':
+                student,
+
+            'academic_year':
+                academic_year,
+
+            'scorecard':
+                scorecard,
+
+            'submissions':
+                submissions,
+        }
+    )
+@login_required
+def iqac_score_overview(
+    request
+):
+
+    if portal_role(
+        request.user
+    ) != 'IQAC':
+
+        return HttpResponseForbidden(
+            'IQAC access only.'
+        )
+
+
+    academic_year = (
+        request.GET.get(
+            'academic_year',
+            '2026-2027'
+        )
+    )
+
+
+    students = (
+        Student.objects
+        .filter(
+            active=True
+        )
+        .select_related(
+            'department'
+        )
+    )
+
+
+    rows = []
+
+
+    for student in students:
+
+        card = (
+            student_scorecard(
+                student,
+                academic_year
+            )
+        )
+
+
+        rows.append({
+
+            'student':
+                student,
+
+            'total':
+                card['total'],
+
+            'category':
+                card['category'],
+        })
+
+
+    return render(
+        request,
+        'core/iqac_score_overview.html',
+        {
+
+            'rows':
+                rows,
+
+            'academic_year':
+                academic_year,
+        }
+    )
+
+@login_required
 @require_POST
 def approve(request, model, pk, decision):
 
@@ -2818,6 +3114,22 @@ def approve(request, model, pk, decision):
 
     return redirect(
         'approvals'
+    )
+def portal_role(user):
+
+    if user.is_superuser:
+        return 'IQAC'
+
+    profile = getattr(
+        user,
+        'profile',
+        None
+    )
+
+    return getattr(
+        profile,
+        'role',
+        ''
     )
 
 @login_required

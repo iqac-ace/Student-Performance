@@ -1,0 +1,174 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+
+<h2>
+    Student Progress Verification
+</h2>
+
+<p class="text-muted">
+    Verify submitted evidence.
+    Points are calculated automatically
+    according to the approved scoring rule.
+</p>
+
+
+<div class="table-responsive">
+
+<table class="table table-hover align-middle">
+
+<thead>
+
+<tr>
+    <th>Student</th>
+    <th>Parameter</th>
+    <th>Academic Year</th>
+    <th>Details</th>
+    <th>Evidence</th>
+    <th>Action</th>
+</tr>
+
+</thead>
+
+
+<tbody>
+
+{% for s in submissions %}
+
+<tr>
+
+    <td>
+
+        <strong>
+            {{ s.student.register_number }}
+        </strong>
+
+        <br>
+
+        {{ s.student.name }}
+
+        <br>
+
+        <small>
+            {{ s.student.department }}
+        </small>
+
+    </td>
+
+
+    <td>
+
+        {{ s.parameter.name }}
+
+        <br>
+
+        <strong>
+            Maximum:
+            {{ s.parameter.max_points }}
+        </strong>
+
+    </td>
+
+
+    <td>
+        {{ s.academic_year }}
+    </td>
+
+
+    <td>
+
+        {% for key, value in s.details.items %}
+
+        <div>
+            <strong>
+                {{ key|title }}:
+            </strong>
+
+            {{ value }}
+        </div>
+
+        {% endfor %}
+
+    </td>
+
+
+    <td>
+
+        <a
+            href="{{ s.evidence.url }}"
+            target="_blank"
+            class="btn btn-sm btn-outline-primary"
+        >
+            View Evidence
+        </a>
+
+    </td>
+
+
+    <td>
+
+        <form
+            method="post"
+            action="{% url 'verify_progress' s.id 'approve' %}"
+            class="mb-2"
+        >
+
+            {% csrf_token %}
+
+            <textarea
+                name="verification_remarks"
+                class="form-control form-control-sm mb-2"
+                placeholder="Verification remarks"
+            ></textarea>
+
+            <button
+                class="btn btn-success btn-sm"
+            >
+                Verify & Add Points
+            </button>
+
+        </form>
+
+
+        <form
+            method="post"
+            action="{% url 'verify_progress' s.id 'reject' %}"
+        >
+
+            {% csrf_token %}
+
+            <button
+                class="btn btn-outline-danger btn-sm"
+            >
+                Reject
+            </button>
+
+        </form>
+
+    </td>
+
+</tr>
+
+
+{% empty %}
+
+<tr>
+
+    <td
+        colspan="6"
+        class="text-center py-5 text-muted"
+    >
+        No submissions waiting for verification.
+    </td>
+
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+</div>
+
+{% endblock %}

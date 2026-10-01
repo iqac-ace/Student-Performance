@@ -7,13 +7,43 @@
     <div class="mb-4">
 
         <h2>
-            Upload / Add Student Progress
+            Add Student Progress
         </h2>
 
-        <p class="text-muted">
-            Add academic and co-curricular
-            performance evidence.
-        </p>
+        <div class="text-muted">
+            Submit one achievement for HOD verification.
+        </div>
+
+    </div>
+
+
+    <div class="card border-0 shadow-sm mb-4">
+
+        <div class="card-body">
+
+            <strong>
+                Student:
+            </strong>
+
+            {{ student.name }}
+
+            <br>
+
+            <strong>
+                Register No:
+            </strong>
+
+            {{ student.register_number }}
+
+            <br>
+
+            <strong>
+                Department:
+            </strong>
+
+            {{ student.department }}
+
+        </div>
 
     </div>
 
@@ -26,282 +56,7 @@
         {% csrf_token %}
 
 
-        <!-- STUDENT -->
-
-        {% if role != 'STUDENT' %}
-
         <div class="card border-0 shadow-sm mb-4">
-
-            <div class="card-body">
-
-                <label class="form-label fw-semibold">
-                    Student
-                </label>
-
-                {{ form.student }}
-
-                {% for error in form.student.errors %}
-
-                <div class="text-danger small">
-                    {{ error }}
-                </div>
-
-                {% endfor %}
-
-            </div>
-
-        </div>
-
-        {% else %}
-
-            {{ form.student }}
-
-            <div class="alert alert-light border">
-
-                <strong>Student:</strong>
-                {{ own_student.name }}
-
-                <br>
-
-                <strong>Register No:</strong>
-                {{ own_student.register_number }}
-
-            </div>
-
-        {% endif %}
-
-
-
-        <!-- PARAMETER -->
-
-        <div class="card border-0 shadow-sm mb-4">
-
-            <div class="card-body">
-
-                <label class="form-label fw-semibold">
-                    Parameter
-                </label>
-
-                {{ form.parameter }}
-
-                {% for error in form.parameter.errors %}
-
-                <div class="text-danger small">
-                    {{ error }}
-                </div>
-
-                {% endfor %}
-
-            </div>
-
-        </div>
-
-
-
-        <!-- ================================= -->
-        <!-- +2 ACADEMIC PERFORMANCE -->
-        <!-- ================================= -->
-
-        <div
-            id="academicPerformanceSection"
-            class="card border-0 shadow-sm mb-4"
-            style="display:none;"
-        >
-
-            <div class="card-header bg-white">
-
-                <h4 class="mb-1">
-                    A. +2 Academic Performance
-                </h4>
-
-                <div class="text-muted">
-                    Maximum Weightage: 20 Points
-                </div>
-
-            </div>
-
-
-            <div class="card-body">
-
-                <h5 class="mb-3">
-                    Academic Details
-                </h5>
-
-
-                <div class="row g-3">
-
-
-                    <!-- BOARD -->
-
-                    <div class="col-md-6">
-
-                        <label class="form-label">
-                            Board
-                        </label>
-
-                        {{ form.board }}
-
-                        {% for error in form.board.errors %}
-
-                        <div class="text-danger small">
-                            {{ error }}
-                        </div>
-
-                        {% endfor %}
-
-                    </div>
-
-
-
-                    <!-- SCHOOL -->
-
-                    <div class="col-md-6">
-
-                        <label class="form-label">
-                            School
-                        </label>
-
-                        {{ form.school }}
-
-                        {% for error in form.school.errors %}
-
-                        <div class="text-danger small">
-                            {{ error }}
-                        </div>
-
-                        {% endfor %}
-
-                    </div>
-
-
-
-                    <!-- YEAR -->
-
-                    <div class="col-md-6">
-
-                        <label class="form-label">
-                            Year
-                        </label>
-
-                        {{ form.academic_year }}
-
-                        {% for error in form.academic_year.errors %}
-
-                        <div class="text-danger small">
-                            {{ error }}
-                        </div>
-
-                        {% endfor %}
-
-                    </div>
-
-
-
-                    <!-- GROUP -->
-
-                    <div class="col-md-6">
-
-                        <label class="form-label">
-                            Group
-                        </label>
-
-                        {{ form.academic_group }}
-
-                        {% for error in form.academic_group.errors %}
-
-                        <div class="text-danger small">
-                            {{ error }}
-                        </div>
-
-                        {% endfor %}
-
-                    </div>
-
-
-
-                    <!-- MARKS -->
-
-                    <div class="col-md-4">
-
-                        <label class="form-label">
-                            Marks Obtained
-                        </label>
-
-                        {{ form.marks_obtained }}
-
-                        {% for error in form.marks_obtained.errors %}
-
-                        <div class="text-danger small">
-                            {{ error }}
-                        </div>
-
-                        {% endfor %}
-
-                    </div>
-
-
-
-                    <!-- MAXIMUM -->
-
-                    <div class="col-md-4">
-
-                        <label class="form-label">
-                            Maximum Marks
-                        </label>
-
-                        {{ form.maximum_marks }}
-
-                        {% for error in form.maximum_marks.errors %}
-
-                        <div class="text-danger small">
-                            {{ error }}
-                        </div>
-
-                        {% endfor %}
-
-                    </div>
-
-
-
-                    <!-- PERCENTAGE -->
-
-                    <div class="col-md-4">
-
-                        <label class="form-label">
-                            Percentage
-                        </label>
-
-                        <input
-                            id="percentagePreview"
-                            type="text"
-                            class="form-control"
-                            readonly
-                            placeholder="Automatic"
-                        >
-
-                    </div>
-
-                </div>
-
-
-                <hr class="my-4">
-
-
-
-            </div>
-
-        </div>
-
-
-
-        <!-- ================================= -->
-        <!-- NORMAL ACTIVITY SECTION -->
-        <!-- ================================= -->
-
-        <div
-            id="normalActivitySection"
-            class="card border-0 shadow-sm mb-4"
-        >
 
             <div class="card-body">
 
@@ -310,40 +65,22 @@
 
                     <div class="col-md-8">
 
-                        <label class="form-label">
-                            Activity Title
+                        <label class="form-label fw-semibold">
+                            Performance Parameter
                         </label>
 
-                        {{ form.title }}
-
-                        {% for error in form.title.errors %}
-
-                        <div class="text-danger small">
-                            {{ error }}
-                        </div>
-
-                        {% endfor %}
+                        {{ form.parameter }}
 
                     </div>
 
 
                     <div class="col-md-4">
 
-                        <label class="form-label">
-                            Activity Date
+                        <label class="form-label fw-semibold">
+                            Academic Year
                         </label>
 
-                        {{ form.activity_date }}
-
-                    </div>
-
-                    <div class="col-12">
-
-                        <label class="form-label">
-                            Remarks
-                        </label>
-
-                        {{ form.remarks }}
+                        {{ form.academic_year }}
 
                     </div>
 
@@ -354,16 +91,468 @@
         </div>
 
 
+        <!-- ACADEMIC -->
 
-        <button
-            type="submit"
-            class="btn btn-primary btn-lg"
+        <div
+            id="section-ACADEMIC"
+            class="parameter-section card border-0 shadow-sm mb-4"
+            style="display:none;"
         >
 
-            <i class="bi bi-send me-1"></i>
+            <div class="card-header bg-white">
 
+                <h5 class="mb-0">
+                    Academic Performance /20
+                </h5>
+
+            </div>
+
+
+            <div class="card-body">
+
+                <div class="row g-3">
+
+                    <div class="col-md-4">
+                        <label class="form-label">
+                            Basis
+                        </label>
+                        {{ form.academic_basis }}
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label">
+                            CGPA / SGPA
+                        </label>
+                        {{ form.academic_value }}
+                    </div>
+
+                </div>
+
+
+                <hr>
+
+
+                <h6>
+                    +2 Details for First-Year Provisional Score
+                </h6>
+
+
+                <div class="row g-3">
+
+                    <div class="col-md-6">
+                        <label>Board</label>
+                        {{ form.board }}
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>School</label>
+                        {{ form.school }}
+                    </div>
+
+                    <div class="col-md-4">
+                        <label>Year</label>
+                        {{ form.plus2_year }}
+                    </div>
+
+                    <div class="col-md-4">
+                        <label>Group</label>
+                        {{ form.plus2_group }}
+                    </div>
+
+                    <div class="col-md-4">
+                        <label>Percentage</label>
+                        {{ form.plus2_percentage }}
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- ATTENDANCE -->
+
+        <div
+            id="section-ATTENDANCE"
+            class="parameter-section card border-0 shadow-sm mb-4"
+            style="display:none;"
+        >
+
+            <div class="card-header bg-white">
+                <h5>Attendance & Academic Discipline /10</h5>
+            </div>
+
+            <div class="card-body">
+
+                <div class="row g-3">
+
+                    <div class="col-md-6">
+                        <label>Attendance Percentage</label>
+                        {{ form.attendance_percentage }}
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>Semester / Period</label>
+                        {{ form.attendance_period }}
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- LEARNING -->
+
+        <div
+            id="section-LEARNING"
+            class="parameter-section card border-0 shadow-sm mb-4"
+            style="display:none;"
+        >
+
+            <div class="card-header bg-white">
+                <h5>Learning & Certification /10</h5>
+            </div>
+
+            <div class="card-body">
+
+                <div class="row g-3">
+
+                    <div class="col-md-12">
+                        <label>Achievement</label>
+                        {{ form.learning_level }}
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>Certificate / Course Name</label>
+                        {{ form.certificate_name }}
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>Provider</label>
+                        {{ form.certificate_provider }}
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- TECHNICAL -->
+
+        <div
+            id="section-TECHNICAL"
+            class="parameter-section card border-0 shadow-sm mb-4"
+            style="display:none;"
+        >
+
+            <div class="card-header bg-white">
+                <h5>Technical Skills & Projects /15</h5>
+            </div>
+
+            <div class="card-body">
+
+                <div class="row g-3">
+
+                    <div class="col-12">
+                        <label>Achievement Level</label>
+                        {{ form.technical_level }}
+                    </div>
+
+                    <div class="col-md-7">
+                        <label>Project / Event Name</label>
+                        {{ form.technical_title }}
+                    </div>
+
+                    <div class="col-md-5">
+                        <label>Technology / Tools</label>
+                        {{ form.technology_used }}
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- INTERNSHIP -->
+
+        <div
+            id="section-INTERNSHIP"
+            class="parameter-section card border-0 shadow-sm mb-4"
+            style="display:none;"
+        >
+
+            <div class="card-header bg-white">
+                <h5>Internship & Industry Exposure /10</h5>
+            </div>
+
+            <div class="card-body">
+
+                <div class="row g-3">
+
+                    <div class="col-12">
+                        <label>Achievement</label>
+                        {{ form.internship_level }}
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>Organisation</label>
+                        {{ form.internship_organization }}
+                    </div>
+
+                    <div class="col-md-4">
+                        <label>Internship / Project Title</label>
+                        {{ form.internship_title }}
+                    </div>
+
+                    <div class="col-md-2">
+                        <label>Weeks</label>
+                        {{ form.duration_weeks }}
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- RESEARCH -->
+
+        <div
+            id="section-RESEARCH"
+            class="parameter-section card border-0 shadow-sm mb-4"
+            style="display:none;"
+        >
+
+            <div class="card-header bg-white">
+                <h5>Research, Innovation & IPR /10</h5>
+            </div>
+
+            <div class="card-body">
+
+                {{ form.research_level }}
+
+                <div class="row g-3 mt-1">
+
+                    <div class="col-md-7">
+                        <label>Research / Patent / Paper Title</label>
+                        {{ form.research_title }}
+                    </div>
+
+                    <div class="col-md-5">
+                        <label>Reference / DOI / Patent Number</label>
+                        {{ form.research_reference }}
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- CAREER -->
+
+        <div
+            id="section-CAREER"
+            class="parameter-section card border-0 shadow-sm mb-4"
+            style="display:none;"
+        >
+
+            <div class="card-header bg-white">
+                <h5>Placement & Career Readiness /10</h5>
+            </div>
+
+            <div class="card-body">
+
+                {{ form.career_level }}
+
+                <div class="row g-3 mt-1">
+
+                    <div class="col-md-6">
+                        <label>Activity / Achievement</label>
+                        {{ form.career_activity }}
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>Company / Institution</label>
+                        {{ form.career_organization }}
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- LEADERSHIP -->
+
+        <div
+            id="section-LEADERSHIP"
+            class="parameter-section card border-0 shadow-sm mb-4"
+            style="display:none;"
+        >
+
+            <div class="card-header bg-white">
+                <h5>Leadership & Student Engagement /5</h5>
+            </div>
+
+            <div class="card-body">
+
+                {{ form.leadership_level }}
+
+                <div class="row g-3 mt-1">
+
+                    <div class="col-md-6">
+                        <label>Role</label>
+                        {{ form.leadership_role }}
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>Club / Society / Body</label>
+                        {{ form.club_body }}
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- SOCIAL -->
+
+        <div
+            id="section-SOCIAL"
+            class="parameter-section card border-0 shadow-sm mb-4"
+            style="display:none;"
+        >
+
+            <div class="card-header bg-white">
+                <h5>
+                    Social Responsibility & Institutional Contribution /5
+                </h5>
+            </div>
+
+            <div class="card-body">
+
+                {{ form.social_level }}
+
+                <div class="row g-3 mt-1">
+
+                    <div class="col-md-8">
+                        <label>Initiative / Activity</label>
+                        {{ form.initiative_name }}
+                    </div>
+
+                    <div class="col-md-4">
+                        <label>No. of Activities</label>
+                        {{ form.social_activity_count }}
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- SPORTS -->
+
+        <div
+            id="section-SPORTS"
+            class="parameter-section card border-0 shadow-sm mb-4"
+            style="display:none;"
+        >
+
+            <div class="card-header bg-white">
+                <h5>Sports, Cultural & Achievements /5</h5>
+            </div>
+
+            <div class="card-body">
+
+                {{ form.sports_level }}
+
+                <div class="mt-3">
+
+                    <label>Event / Achievement / Award</label>
+
+                    {{ form.sports_event }}
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- EVIDENCE - COMMON TO ALL -->
+
+        <div class="card border-0 shadow-sm mb-4">
+
+            <div class="card-body">
+
+                <h5>
+                    Supporting Evidence
+                </h5>
+
+                <p class="text-muted">
+                    Upload the certificate, mark sheet,
+                    attendance statement or other proof.
+                </p>
+
+                {{ form.evidence }}
+
+                {% for error in form.evidence.errors %}
+                <div class="text-danger">
+                    {{ error }}
+                </div>
+                {% endfor %}
+
+
+                <div class="mt-3">
+
+                    <label>
+                        Remarks
+                    </label>
+
+                    {{ form.remarks }}
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- FORM ERRORS -->
+
+        {% if form.errors %}
+
+        <div class="alert alert-danger">
+
+            Please correct the highlighted fields.
+
+            {{ form.non_field_errors }}
+
+        </div>
+
+        {% endif %}
+
+
+        <button
+            class="btn btn-primary btn-lg"
+            type="submit"
+        >
             Submit for HOD Verification
-
         </button>
 
     </form>
@@ -371,176 +560,91 @@
 </div>
 
 
-
 <script>
+
+const parameterCodes =
+    JSON.parse(
+        '{{ parameter_codes_json|escapejs }}'
+    );
+
+
+function updateParameterSection() {
+
+    document
+        .querySelectorAll(
+            '.parameter-section'
+        )
+        .forEach(
+            section => {
+                section.style.display =
+                    'none';
+            }
+        );
+
+
+    const select =
+        document.getElementById(
+            'id_parameter'
+        );
+
+
+    if (!select) {
+        return;
+    }
+
+
+    const code =
+        parameterCodes[
+            select.value
+        ];
+
+
+    if (!code) {
+        return;
+    }
+
+
+    const section =
+        document.getElementById(
+            'section-' + code
+        );
+
+
+    if (section) {
+
+        section.style.display =
+            'block';
+
+    }
+
+}
+
 
 document.addEventListener(
     'DOMContentLoaded',
     function () {
 
-        const parameter =
+        const select =
             document.getElementById(
                 'id_parameter'
             );
 
-        const academicSection =
-            document.getElementById(
-                'academicPerformanceSection'
-            );
 
-        const normalSection =
-            document.getElementById(
-                'normalActivitySection'
-            );
+        if (select) {
 
-        const marks =
-            document.getElementById(
-                'id_marks_obtained'
-            );
-
-        const maximum =
-            document.getElementById(
-                'id_maximum_marks'
-            );
-
-        const percentage =
-            document.getElementById(
-                'percentagePreview'
-            );
-
-
-        function isAcademicPerformance() {
-
-            if (!parameter) {
-                return false;
-            }
-
-            const selected =
-                parameter.options[
-                    parameter.selectedIndex
-                ];
-
-            if (!selected) {
-                return false;
-            }
-
-            return selected.text
-                .toLowerCase()
-                .includes(
-                    '+2 academic performance'
-                );
-        }
-
-
-        function updateSections() {
-
-            const academic =
-                isAcademicPerformance();
-
-
-            if (academic) {
-
-                academicSection.style.display =
-                    'block';
-
-                normalSection.style.display =
-                    'none';
-
-            }
-
-            else {
-
-                academicSection.style.display =
-                    'none';
-
-                normalSection.style.display =
-                    'block';
-
-            }
-
-        }
-
-
-        function calculatePercentage() {
-
-            const obtained =
-                parseFloat(
-                    marks?.value
-                );
-
-            const max =
-                parseFloat(
-                    maximum?.value
-                );
-
-
-            if (
-                !isNaN(obtained)
-                &&
-                !isNaN(max)
-                &&
-                max > 0
-            ) {
-
-                percentage.value =
-                    (
-                        obtained
-                        /
-                        max
-                        *
-                        100
-                    ).toFixed(2)
-                    + '%';
-
-            }
-
-            else {
-
-                percentage.value = '';
-
-            }
-
-        }
-
-
-        if (parameter) {
-
-            parameter.addEventListener(
+            select.addEventListener(
                 'change',
-                updateSections
+                updateParameterSection
             );
 
         }
 
 
-        if (marks) {
-
-            marks.addEventListener(
-                'input',
-                calculatePercentage
-            );
-
-        }
-
-
-        if (maximum) {
-
-            maximum.addEventListener(
-                'input',
-                calculatePercentage
-            );
-
-        }
-
-
-        updateSections();
-
-        calculatePercentage();
+        updateParameterSection();
 
     }
 );
 
 </script>
-
 
 {% endblock %}

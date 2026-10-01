@@ -1,0 +1,227 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between mb-4">
+
+    <div>
+
+        <h2>
+            My Performance Scorecard
+        </h2>
+
+        <div class="text-muted">
+
+            {{ student.name }}
+
+            •
+
+            {{ student.register_number }}
+
+            •
+
+            {{ academic_year }}
+
+        </div>
+
+    </div>
+
+
+    <a
+        href="{% url 'student_progress_upload' %}"
+        class="btn btn-primary"
+    >
+        + Add Progress
+    </a>
+
+</div>
+
+
+<div class="row mb-4">
+
+    <div class="col-md-6">
+
+        <div class="card shadow-sm border-0">
+
+            <div class="card-body">
+
+                <div class="text-muted">
+                    Annual Performance Score
+                </div>
+
+                <div class="display-4 fw-bold">
+
+                    {{ scorecard.total }}
+                    /100
+
+                </div>
+
+                <span class="badge bg-primary">
+
+                    {{ scorecard.category }}
+
+                </span>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<div class="card border-0 shadow-sm">
+
+<div class="table-responsive">
+
+<table class="table mb-0">
+
+<thead class="table-light">
+
+<tr>
+    <th>Parameter</th>
+    <th>Maximum</th>
+    <th>Verified Score</th>
+</tr>
+
+</thead>
+
+
+<tbody>
+
+{% for row in scorecard.rows %}
+
+<tr>
+
+    <td>
+        {{ row.parameter.name }}
+    </td>
+
+    <td>
+        {{ row.max_points }}
+    </td>
+
+    <td>
+
+        <strong>
+            {{ row.points }}
+        </strong>
+
+    </td>
+
+</tr>
+
+{% endfor %}
+
+
+<tr class="table-dark">
+
+    <th>
+        TOTAL
+    </th>
+
+    <th>
+        100
+    </th>
+
+    <th>
+        {{ scorecard.total }}
+    </th>
+
+</tr>
+
+</tbody>
+
+</table>
+
+</div>
+
+</div>
+
+
+<h4 class="mt-5">
+    Submission History
+</h4>
+
+
+<div class="table-responsive">
+
+<table class="table">
+
+<thead>
+
+<tr>
+    <th>Parameter</th>
+    <th>Year</th>
+    <th>Status</th>
+    <th>Points</th>
+    <th>Action</th>
+</tr>
+
+</thead>
+
+
+<tbody>
+
+{% for s in submissions %}
+
+<tr>
+    <td>
+        {% if s.status == 'PENDING' %}
+
+    <form
+        method="post"
+        action="{% url 'delete_progress_submission' s.id %}"
+        onsubmit="return confirm(
+            'Delete this submission and uploaded file?'
+        );"
+    >
+
+        {% csrf_token %}
+
+        <button
+            type="submit"
+            class="btn btn-sm btn-outline-danger"
+        >
+            Delete
+        </button>
+
+    </form>
+
+    {% else %}
+
+    <span class="text-muted">
+        Locked
+    </span>
+
+    {% endif %}
+</td>
+
+    <td>
+        {{ s.parameter.name }}
+    </td>
+
+    <td>
+        {{ s.academic_year }}
+    </td>
+
+    <td>
+        {{ s.get_status_display }}
+    </td>
+
+    <td>
+        {{ s.awarded_points }}
+    </td>
+
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+</div>
+
+{% endblock %}

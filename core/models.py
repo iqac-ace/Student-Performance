@@ -1,8 +1,10 @@
+import uuid
+from django.conf import settings
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
 
-ROLE_CHOICES=[('IQAC','IQAC Coordinator'),('HOD','Head of Department'),('FACULTY','Faculty'),('STUDENT','Student')]
+ROLE_CHOICES=[('IQAC','IQAC Coordinator'),('HOD','Head of Department'),('STUDENT','Student')]
 STATUS=[('PENDING','Pending'),('HOD_APPROVED','HOD Approved'),('IQAC_APPROVED','IQAC Approved'),('REJECTED','Rejected')]
 
 class Department(models.Model):
@@ -22,7 +24,6 @@ class Profile(models.Model):
     role = models.CharField(
         max_length=10,
         choices=ROLE_CHOICES,
-        default='FACULTY'
     )
 
     department = models.ForeignKey(
@@ -300,3 +301,202 @@ class MarksUploadRow(models.Model):
 
     def __str__(self):
         return f"Row {self.excel_row} - {self.register_number}"
+
+class ScoreParameter(models.Model):
+
+    code = models.CharField(
+        max_length=30,
+        unique=True
+    )
+
+    name = models.CharField(
+        max_length=200
+    )
+
+    max_points = models.PositiveSmallIntegerField()
+
+    description = models.TextField(
+        blank=True
+    )
+
+    order = models.PositiveSmallIntegerField(
+        default=1
+    )
+
+    active = models.BooleanField(
+        default=True
+    )
+
+    def __str__(self):
+
+        return (
+            f"{self.name} — "
+            f"{self.max_points} Points"
+        )
+
+    class Meta:
+
+        ordering = [
+            'order'
+        ]
+
+
+def progress_evidence_path(
+    instance,
+    filename
+):
+
+    safe_year = (
+        instance.academic_year
+        .replace('/', '-')
+        .replace(' ', '-')
+    )
+
+    unique_name = (
+        f"{uuid.uuid4().hex}_{filename}"
+    )
+
+    return (
+        f"student_progress/"
+        f"{instance.student.register_number}/"
+        f"{safe_year}/"
+        f"{unique_name}"
+    )
+
+
+class ProgressSubmission(models.Model):
+
+    STATUS_CHOICES = [
+
+        (
+            'PENDING',
+            'Pending HOD Verification'
+        ),
+
+        (
+            'HOD_APPROVED',
+            'HOD Approved'
+        ),
+
+        (
+            'REJECTED',
+            'Rejected'
+        ),
+    ]
+
+
+    student = models.ForeignKey(
+        'Student',
+        on_delete=models.CASCADE,
+        related_name='progress_submissions'
+    )
+
+
+    parameter = models.ForeignKey(
+        ScoreParameter,
+        on_delete=models.PROTECT,
+        related_name='submissions'
+    )
+
+
+    academic_year = models.CharField(
+        max_length=20
+    )
+
+
+    # Parameter-specific information
+    # is stored here.
+    details = models.JSONField(
+        default=dict,
+        blank=True
+    )
+
+
+    evidence = models.FileField(
+        upload_to=progress_evidence_path
+    )
+
+
+    remarks = models.TextField(
+        blank=True
+    )
+
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='PENDING'
+    )
+
+
+    awarded_points = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        validators=[
+            MinValueValidator(0)
+        ]
+    )
+
+
+    verification_remarks = models.TextField(
+        blank=True
+    )
+
+
+    verified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='verified_progress'
+    )
+
+
+    verified_at = models.DateTimeField(
+        null=True,
+        blank=True
+    )
+
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+
+    updated_at = models.DateTimeField(
+        auto_now=True
+    )
+
+
+    def __str__(self):
+
+        return (
+            f"{self.student.register_number} - "
+            f"{self.parameter.name} - "
+            f"{self.academic_year}"
+        )
+
+
+    class Meta:
+
+        ordering = [
+            '-created_at'
+        ]
+
+        indexes = [
+
+            models.Index(
+                fields=[
+                    'student',
+                    'academic_year'
+                ]
+            ),
+
+            models.Index(
+                fields=[
+                    'parameter',
+                    'status'
+                ]
+            ),
+        ]

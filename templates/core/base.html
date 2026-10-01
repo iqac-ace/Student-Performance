@@ -157,6 +157,13 @@
         Dashboard
 
     </a>
+    <a href="{% url 'student_scorecard' %}">
+        My scorecard
+    </a>
+    <a href="{% url 'student_progress_upload' %}">
+        Add Progress
+    </a>
+
 
     {% endif %}
 
@@ -214,7 +221,12 @@
     <!-- ========================= -->
 
     {% if request.user.is_superuser or request.user.profile.role == 'IQAC' or request.user.profile.role == 'HOD' %}
-
+     <a href="{% url 'progress_approvals' %}">
+        Progress Verification
+    </a>
+    <a href="{% url 'iqac_score_overview' %}">
+        Student Score Overview
+    </a>
 
     <a href="{% url 'approvals' %}">
 

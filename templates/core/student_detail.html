@@ -39,16 +39,18 @@
     <div class="text-end">
 
         <div class="small text-muted">
-            Student Performance Index
+            Student Performance Score
         </div>
-
         <div class="display-6 fw-bold">
-            {{ spi }}/1000
+            {{ scorecard.total }}/100
         </div>
-
         <span class="badge bg-primary">
-            {{ level }}
+            {{ scorecard.category }}
         </span>
+        <div class="small text-muted mt-2">
+            Performance Rating:
+            {{ scorecard.rating }}/5
+        </div>
 
     </div>
 
