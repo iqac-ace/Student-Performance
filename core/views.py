@@ -391,7 +391,275 @@ def dashboard(request):
             'role':
                 current_role
         }
-    )   
+    ) 
+@login_required
+def download_score_report(request):
+
+    current_role = portal_role(request.user)
+
+    if current_role not in ['IQAC', 'HOD']:
+        return HttpResponseForbidden(
+            'Not authorized.'
+        )
+
+    academic_year = (
+        request.GET.get('academic_year')
+        or current_academic_year()
+    )
+
+    students = (
+        Student.objects
+        .filter(active=True)
+        .select_related('department')
+    )
+
+    # HOD gets only own department
+    if current_role == 'HOD':
+
+        students = students.filter(
+            department=request.user.profile.department
+        )
+
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+
+
+    wb = Workbook()
+
+    ws = wb.active
+
+    ws.title = 'Student Score Report'
+
+
+    headers = [
+
+        'Register Number',
+
+        'Student Name',
+
+        'Department',
+
+        'Year',
+
+        'Academic /20',
+
+        'Attendance /10',
+
+        'Learning /10',
+
+        'Technical /15',
+
+        'Internship /10',
+
+        'Research /10',
+
+        'Career /10',
+
+        'Leadership /5',
+
+        'Social /5',
+
+        'Sports & Cultural /5',
+
+        'Total /100',
+
+        'Performance'
+    ]
+
+
+    ws.append(headers)
+
+
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+
+
+    for student in students:
+
+        card = student_scorecard(
+            student,
+            academic_year
+        )
+
+
+        scores = {
+
+            row['parameter'].code:
+                row['points']
+
+            for row in card['rows']
+        }
+
+
+        ws.append([
+
+            student.register_number,
+
+            student.name,
+
+            student.department.code,
+
+            getattr(student, 'year_of_study', ''),
+
+            scores.get('ACADEMIC', 0),
+
+            scores.get('ATTENDANCE', 0),
+
+            scores.get('LEARNING', 0),
+
+            scores.get('TECHNICAL', 0),
+
+            scores.get('INTERNSHIP', 0),
+
+            scores.get('RESEARCH', 0),
+
+            scores.get('CAREER', 0),
+
+            scores.get('LEADERSHIP', 0),
+
+            scores.get('SOCIAL', 0),
+
+            scores.get('SPORTS', 0),
+
+            card['total'],
+
+            card['category'],
+
+        ])
+
+
+    response = HttpResponse(
+
+        content_type=(
+            'application/vnd.openxmlformats-'
+            'officedocument.spreadsheetml.sheet'
+        )
+    )
+
+
+    response[
+        'Content-Disposition'
+    ] = (
+        f'attachment; '
+        f'filename="ACE_EduCampus_'
+        f'{academic_year}_Report.xlsx"'
+    )
+
+
+    wb.save(response)
+
+    return response  
+@login_required
+def student_score_overview(request):
+
+    current_role = portal_role(
+        request.user
+    )
+
+
+    # Only IQAC and HOD
+    if current_role not in [
+        'IQAC',
+        'HOD'
+    ]:
+
+        return HttpResponseForbidden(
+            'You are not authorized '
+            'to view student scores.'
+        )
+
+
+    academic_year = (
+        request.GET.get(
+            'academic_year'
+        )
+        or current_academic_year()
+    )
+
+
+    students_qs = (
+        Student.objects
+        .filter(
+            active=True
+        )
+        .select_related(
+            'department'
+        )
+        .order_by(
+            'department__code',
+            'register_number'
+        )
+    )
+
+
+    # HOD can see only own department
+    if current_role == 'HOD':
+
+        department = getattr(
+            request.user.profile,
+            'department',
+            None
+        )
+
+
+        if not department:
+
+            return HttpResponseForbidden(
+                'HOD is not assigned '
+                'to a department.'
+            )
+
+
+        students_qs = (
+            students_qs.filter(
+                department=department
+            )
+        )
+
+
+    rows = []
+
+
+    for student in students_qs:
+
+        card = student_scorecard(
+            student,
+            academic_year
+        )
+
+
+        rows.append(
+            {
+                'student':
+                    student,
+
+                'scorecard':
+                    card,
+
+                'total':
+                    card['total'],
+
+                'category':
+                    card['category'],
+            }
+        )
+
+
+    return render(
+        request,
+        'core/student_score_overview.html',
+        {
+            'rows':
+                rows,
+
+            'academic_year':
+                academic_year,
+
+            'current_role':
+                current_role,
+        }
+    )
 @login_required
 def download_dashboard_report(request):
 
@@ -1084,7 +1352,32 @@ def student_detail(request, pk):
             )
         ),
         pk=pk
+
     )
+    current_role = portal_role(
+    request.user
+    )
+    if current_role == 'STUDENT':
+        if s.user_id != request.user.id:
+            return HttpResponseForbidden(
+            'You cannot view another '
+            'student profile.'
+        )
+        elif current_role == 'HOD':
+            if (
+                s.department_id
+                != request.user.profile.department_id
+                ):
+                return HttpResponseForbidden(
+            'You cannot view students '
+            'from another department.'
+        )
+            elif current_role == 'IQAC':
+                pass
+            else:
+                return HttpResponseForbidden(
+                    'Not authorized.'
+                    )
 
     marks = s.subject_marks.select_related(
         'subject'
@@ -2495,10 +2788,11 @@ def semester_add(request):
 
 @login_required
 def activity_add(request):
+    current_role = portal_role(request.user)
     if role(request.user) not in [
     'IQAC',
     'HOD',
-    'FACULTY'
+    
 ]:
         return HttpResponseForbidden(
         'Not authorized.'
@@ -2526,31 +2820,27 @@ def approvals(request):
     return render(request,'core/approvals.html',{'activities':activities.select_related('student','parameter'),'semesters':semesters.select_related('student'),'marks':marks.select_related('student','subject'),'role':r})
 
 @login_required
-def progress_approvals(
-    request
-):
+def progress_approvals(request):
 
-    if portal_role(
+    current_role = portal_role(
         request.user
-    ) != 'HOD':
+    )
+
+
+    if current_role not in [
+        'HOD',
+        'IQAC'
+    ]:
 
         return HttpResponseForbidden(
-            'HOD access only.'
+            'Only HOD and IQAC can '
+            'verify student progress.'
         )
-
-
-    department_id = (
-        request.user
-        .profile
-        .department_id
-    )
 
 
     submissions = (
         ProgressSubmission.objects
         .filter(
-            student__department_id=
-                department_id,
             status='PENDING'
         )
         .select_related(
@@ -2559,20 +2849,76 @@ def progress_approvals(
             'parameter'
         )
         .order_by(
+            'student__department__code',
+            'student__register_number',
             'created_at'
         )
     )
+
+
+    # HOD sees only their department
+    if current_role == 'HOD':
+
+        department = getattr(
+            request.user.profile,
+            'department',
+            None
+        )
+
+
+        if not department:
+
+            return HttpResponseForbidden(
+                'HOD department '
+                'is not configured.'
+            )
+
+
+        submissions = (
+            submissions.filter(
+                student__department=
+                    department
+            )
+        )
+
+
+    items = []
+
+
+    for submission in submissions:
+
+        calculated_points = min(
+
+            calculate_submission_points(
+                submission
+            ),
+
+            submission.parameter.max_points
+        )
+
+
+        items.append(
+            {
+                'submission':
+                    submission,
+
+                'calculated_points':
+                    calculated_points,
+            }
+        )
 
 
     return render(
         request,
         'core/progress_approvals.html',
         {
-            'submissions':
-                submissions
+            'items':
+                items,
+
+            'current_role':
+                current_role,
         }
     )
-
 @login_required
 def delete_progress_submission(
     request,
@@ -2659,45 +3005,87 @@ def verify_progress(
     decision
 ):
 
-    if (
-        portal_role(
-            request.user
-        ) != 'HOD'
-        or request.method != 'POST'
-    ):
-
-        return HttpResponseForbidden(
-            'Not authorized.'
-        )
-
-
-    submission = (
-        get_object_or_404(
-            ProgressSubmission,
-            pk=pk
-        )
-    )
-
-
-    hod_department = (
+    current_role = portal_role(
         request.user
-        .profile
-        .department_id
     )
 
 
-    if (
-        submission.student.department_id
-        != hod_department
-    ):
+    if current_role not in [
+        'HOD',
+        'IQAC'
+    ]:
 
         return HttpResponseForbidden(
-            'You cannot verify another '
-            'department record.'
+            'You are not authorized '
+            'to verify progress.'
         )
 
 
-    remarks = (
+    if request.method != 'POST':
+
+        return HttpResponseForbidden(
+            'POST request required.'
+        )
+
+
+    submission = get_object_or_404(
+
+        ProgressSubmission.objects
+        .select_related(
+            'student',
+            'student__department',
+            'parameter'
+        ),
+
+        pk=pk
+    )
+
+
+    # ---------------------------------------
+    # HOD department security
+    # ---------------------------------------
+
+    if current_role == 'HOD':
+
+        hod_department = getattr(
+            request.user.profile,
+            'department',
+            None
+        )
+
+
+        if (
+            not hod_department
+            or
+            submission.student.department_id
+            != hod_department.id
+        ):
+
+            return HttpResponseForbidden(
+                'You cannot verify a '
+                'student from another department.'
+            )
+
+
+    # ---------------------------------------
+    # IQAC can verify any department
+    # ---------------------------------------
+
+
+    if submission.status != 'PENDING':
+
+        messages.warning(
+            request,
+            'This submission has '
+            'already been processed.'
+        )
+
+        return redirect(
+            'progress_approvals'
+        )
+
+
+    verification_remarks = (
         request.POST.get(
             'verification_remarks',
             ''
@@ -2705,31 +3093,51 @@ def verify_progress(
     )
 
 
+    # =======================================
+    # APPROVE
+    # =======================================
+
     if decision == 'approve':
 
-        points = (
+        calculated_points = (
             calculate_submission_points(
                 submission
             )
         )
 
 
-        # Security check:
-        # never exceed parameter maximum.
-        points = min(
-            points,
+        calculated_points = min(
+            calculated_points,
             submission.parameter.max_points
         )
 
 
         submission.awarded_points = (
-            points
+            calculated_points
         )
 
+
+        # Keep existing code so old scoring
+        # queries continue working.
         submission.status = (
             'HOD_APPROVED'
         )
 
+
+        messages.success(
+            request,
+            (
+                f'Progress verified successfully. '
+                f'{calculated_points}/'
+                f'{submission.parameter.max_points} '
+                f'points awarded.'
+            )
+        )
+
+
+    # =======================================
+    # REJECT
+    # =======================================
 
     elif decision == 'reject':
 
@@ -2740,24 +3148,33 @@ def verify_progress(
         )
 
 
+        messages.success(
+            request,
+            'Submission rejected.'
+        )
+
+
     else:
 
         return HttpResponseForbidden(
-            'Invalid decision.'
+            'Invalid verification decision.'
         )
 
 
     submission.verification_remarks = (
-        remarks
+        verification_remarks
     )
+
 
     submission.verified_by = (
         request.user
     )
 
+
     submission.verified_at = (
         timezone.now()
     )
+
 
     submission.save()
 
@@ -2907,7 +3324,7 @@ def iqac_score_overview(
 
     return render(
         request,
-        'core/iqac_score_overview.html',
+        'core/student_score_overview.html',
         {
 
             'rows':

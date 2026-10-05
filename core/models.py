@@ -370,12 +370,12 @@ class ProgressSubmission(models.Model):
 
         (
             'PENDING',
-            'Pending HOD Verification'
+            'Pending Verification'
         ),
 
         (
             'HOD_APPROVED',
-            'HOD Approved'
+            'Verified'
         ),
 
         (

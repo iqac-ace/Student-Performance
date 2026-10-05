@@ -157,15 +157,20 @@
         Dashboard
 
     </a>
-    <a href="{% url 'student_scorecard' %}">
-        My scorecard
-    </a>
-    <a href="{% url 'student_progress_upload' %}">
-        Add Progress
-    </a>
-
-
+    
     {% endif %}
+
+    {% if portal_role == 'STUDENT' %}
+
+<a href="{% url 'student_scorecard' %}">
+    My Scorecard
+</a>
+
+<a href="{% url 'student_progress_upload' %}">
+    Add Progress
+</a>
+
+{% endif %}
 
 
 
@@ -203,15 +208,6 @@
     </a>
 
 
-    <a href="{% url 'activity_add' %}">
-
-        <i class="bi bi-award me-2"></i>
-
-        Activities & Evidence
-
-    </a>
-
-
     {% endif %}
 
 
@@ -224,6 +220,7 @@
      <a href="{% url 'progress_approvals' %}">
         Progress Verification
     </a>
+    
     <a href="{% url 'iqac_score_overview' %}">
         Student Score Overview
     </a>

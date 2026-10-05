@@ -47,10 +47,6 @@
         <span class="badge bg-primary">
             {{ scorecard.category }}
         </span>
-        <div class="small text-muted mt-2">
-            Performance Rating:
-            {{ scorecard.rating }}/5
-        </div>
 
     </div>
 
@@ -77,28 +73,69 @@
 
     </div>
 
+<!-- ======================================= -->
+<!-- NEW 100 POINT PERFORMANCE BREAKDOWN -->
+<!-- ======================================= -->
+<!-- NEW 100-POINT PERFORMANCE BREAKDOWN -->
 
-    {% for k,v in scores.items %}
+<div class="mt-4">
 
-    <div class="col-md-3">
+    <h4 class="mb-3">
+        Performance Breakdown
+    </h4>
 
-        <div class="card p-3">
+    <div class="row g-3">
 
-            <small>
-                Category {{ k }}
-            </small>
+        {% for row in scorecard.rows %}
 
-            <b>
-                {{ v }}
-            </b>
+        <div class="col-md-6 col-lg-4">
+
+            <div class="card border-0 shadow-sm h-100">
+
+                <div class="card-body">
+
+                    <div class="text-muted small">
+
+                        {{ row.parameter.order }}.
+                        {{ row.parameter.name }}
+
+                    </div>
+
+                    <div class="fs-3 fw-bold mt-2">
+
+                        {{ row.points }}
+                        /
+                        {{ row.max_points }}
+
+                    </div>
+
+                </div>
+
+            </div>
 
         </div>
 
+        {% empty %}
+
+        <div class="col-12">
+
+            <div class="alert alert-light border">
+
+                No verified performance records available.
+
+            </div>
+
+        </div>
+
+        {% endfor %}
+
     </div>
-
-    {% endfor %}
-
 </div>
+
+
+
+
+
 
 
 
