@@ -237,9 +237,46 @@ class StudentProgressForm(forms.ModelForm):
             }
         )
     )
+    subtopic = forms.CharField(
+    required=True,
+    widget=forms.Select(
+        attrs={
+            'class': 'form-select',
+            'id': 'id_subtopic'
+        }
+    )
+)
 
+detail_1 = forms.CharField(
+    required=False,
+    widget=forms.TextInput(
+        attrs={
+            'class': 'form-control',
+            'id': 'id_detail_1'
+        }
+    )
+)
 
-    class Meta:
+detail_2 = forms.CharField(
+    required=False,
+    widget=forms.TextInput(
+        attrs={
+            'class': 'form-control',
+            'id': 'id_detail_2'
+        }
+    )
+)
+
+detail_3 = forms.CharField(
+    required=False,
+    widget=forms.TextInput(
+        attrs={
+            'class': 'form-control',
+            'id': 'id_detail_3'
+        }
+    )
+)
+class Meta:
 
         model = ActivityEvidence
 
@@ -323,73 +360,47 @@ class StudentProgressForm(forms.ModelForm):
                 }
             ),
         }
-
-
-    def __init__(
-        self,
-        *args,
-        user=None,
-        **kwargs
-    ):
-
-        super().__init__(
+        def __init__(
+                self,
+                *args,
+                user=None,
+                **kwargs
+                ):
+            super().__init__(
             *args,
             **kwargs
         )
-        # Show maximum weightage in parameter dropdown
-        if 'parameter' in self.fields:
-
-            self.fields[
+            if 'parameter' in self.fields:
+                self.fields[
                 'parameter'
             ].label_from_instance = lambda obj: (
                 f"{obj.category_code}. "
                 f"{obj.name} "
                 f"— {obj.max_points} Points"
             )
-
-        if not user:
-            return
-
-
-        if user.is_superuser:
-
-            current_role = 'IQAC'
-
-        else:
-
-            current_role = getattr(
-                user.profile,
-                'role',
-                ''
-            )
-
-
-        # ======================================
-        # STUDENT
-        # ======================================
-
-        if current_role == 'STUDENT':
-
-            self.fields[
-                'student'
-            ].required = False
-
-            self.fields[
-                'student'
-            ].widget = forms.HiddenInput()
-
-
-        # ======================================
-        # HOD / FACULTY
-        # ======================================
-
-        elif current_role in [
-            'HOD',
-            'FACULTY'
-        ]:
-
-            self.fields[
-                'student'
+                if not user:
+                    return
+                    if user.is_superuser:
+                        current_role = 'IQAC'
+                    else:
+                        current_role = getattr(
+                            user.profile,
+                            'role',
+                            ''
+                            )
+                        if current_role == 'STUDENT':
+                            self.fields[
+                                'student'
+                                  ].required = False
+                            self.fields[
+                                'student'
+                                ].widget = forms.HiddenInput()
+                        elif current_role in [
+                            'HOD',
+                            'FACULTY'
+                            ]:
+                            self.fields[
+                                'student'
             ].queryset = (
                 Student.objects.filter(
                     department=user.profile.department,
@@ -398,15 +409,8 @@ class StudentProgressForm(forms.ModelForm):
                     'register_number'
                 )
             )
-
-
-        # ======================================
-        # IQAC
-        # ======================================
-
-        else:
-
-            self.fields[
+                        else:
+                            self.fields[
                 'student'
             ].queryset = (
                 Student.objects.filter(
@@ -418,37 +422,22 @@ class StudentProgressForm(forms.ModelForm):
                     'register_number'
                 )
             )
-
-
-    def clean(self):
-
-        cleaned = super().clean()
-
-        parameter = cleaned.get(
+            def clean(self):
+                cleaned = super().clean()
+                parameter = cleaned.get(
             'parameter'
         )
-
-
-        parameter_text = (
-            str(parameter).lower()
+                parameter_text = (
+        str(parameter).lower()
             if parameter
             else ''
         )
-
-
-        is_plus2 = (
-            '+2 academic performance'
-            in parameter_text
+                is_plus2 = (
+                 '+2 academic performance'
+                   in parameter_text
         )
-
-
-        # ======================================
-        # +2 ACADEMIC PERFORMANCE
-        # ======================================
-
-        if is_plus2:
-
-            required_fields = {
+                if is_plus2:
+                    required_fields = {
 
                 'board':
                     'Board is required.',
@@ -469,37 +458,26 @@ class StudentProgressForm(forms.ModelForm):
                     'Maximum marks is required.',
 
             }
-
-
-            for field, message in (
+                    for field, message in (
                 required_fields.items()
             ):
-
-                if not cleaned.get(field):
-
-                    self.add_error(
+                        if not cleaned.get(field):
+                            self.add_error(
                         field,
                         message
                     )
-
-
-            obtained = cleaned.get(
+                            obtained = cleaned.get(
                 'marks_obtained'
             )
-
-            maximum = cleaned.get(
+                            maximum = cleaned.get(
                 'maximum_marks'
             )
-
-
-            if (
-                obtained is not None
+                            if (
+                              obtained is not None
                 and maximum is not None
             ):
-
-                if maximum <= 0:
-
-                    self.add_error(
+                                if maximum <= 0:
+                                    self.add_error(
                         'maximum_marks',
                         'Maximum marks must be greater than zero.'
                     )
@@ -510,35 +488,22 @@ class StudentProgressForm(forms.ModelForm):
                         'marks_obtained',
                         'Marks obtained cannot exceed maximum marks.'
                     )
-
-
-        # ======================================
-        # OTHER ACTIVITIES
-        # ======================================
-
-        else:
-
-            if not cleaned.get(
+                else:
+                    if not cleaned.get(
                 'title'
             ):
-
-                self.add_error(
+                        self.add_error(
                     'title',
                     'Activity title is required.'
                 )
-
-
-            if not cleaned.get(
+                        if not cleaned.get(
                 'activity_date'
             ):
-
-                self.add_error(
+                            self.add_error(
                     'activity_date',
                     'Activity date is required.'
                 )
-
-
-        return cleaned
+                return cleaned
 
 
 class ProgressSubmissionForm(
@@ -1404,6 +1369,7 @@ class ProgressSubmissionForm(
 
             'parameter',
             'academic_year',
+            'subtopic',
             'evidence',
             'remarks',
         ]

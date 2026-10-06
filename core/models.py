@@ -410,11 +410,17 @@ class ProgressSubmission(models.Model):
         default=dict,
         blank=True
     )
-
-
+    subtopic = models.CharField(
+    max_length=150,
+    blank=True
+    )
+    details = models.JSONField(
+        default=dict,
+        blank=True
+        )
     evidence = models.FileField(
         upload_to=progress_evidence_path
-    )
+        )
 
 
     remarks = models.TextField(

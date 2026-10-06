@@ -16,8 +16,9 @@ from datetime import datetime
 from datetime import timedelta 
 from .models import *
 from .forms import *
+from .progress_rules import PROGRESS_RULES
 from .utils import student_spi
-from .models import (Profile,Department,Student,AuditLog,ProgressSubmission, ScoreParameter)
+from .models import (Profile,Department,Student,AuditLog,ProgressSubmission,ScoreParameter)
 from .forms import StaffCreateForm
 from .scoring import (calculate_submission_points, student_scorecard)
 from .forms import (StudentForm,SubjectForm,SemesterResultForm,ActivityForm,ExcelUploadForm,StaffCreateForm,StudentProgressForm,ProgressSubmissionForm)
@@ -1609,7 +1610,12 @@ def student_progress_upload(
             active=True
         )
     }
-
+    rules_json = json.dumps(PROGRESS_RULES)
+    parameters = (
+        ScoreParameter.objects
+          .filter(active=True)
+          .order_by('order')
+          )
 
     return render(
         request,
@@ -1619,6 +1625,8 @@ def student_progress_upload(
             'form': form,
 
             'student': student,
+            'parameters': parameters,
+            'rules_json': rules_json,
 
             'parameter_codes_json':
                 json.dumps(
@@ -1645,43 +1653,53 @@ def student_edit(request, pk):
         request.POST or None,
         instance=student
     )
-
     if form.is_valid():
-        updated_student = form.save(commit=False)
-
-        # HOD should not be able to transfer student to another department
-        if role(request.user) == 'HOD':
-            updated_student.department = request.user.profile.department
-
-        updated_student.save()
-
-        # Create audit record
-        AuditLog.objects.create(
-            actor=request.user,
-            action='Student details updated',
-            entity='Student',
-            entity_id=str(updated_student.id),
-            details=f'Updated student: {updated_student.register_number} - {updated_student.name}'
+        progress = form.save(
+        commit=False
         )
+        progress.student = student
+        progress.status = 'PENDING'
+        progress.subtopic = (
+            request.POST.get(
+                'subtopic',
+                ''
+        )
+        )
+        progress.details = {
+            'detail_1':
+            request.POST.get(
+                 'detail_1',
+                ''
+            ),
 
+           'detail_2':
+            request.POST.get(
+                'detail_2',
+                ''
+            ),
+
+           'detail_3':
+            request.POST.get(
+                'detail_3',
+                ''
+            ),
+            }
+        progress.save()
         messages.success(
             request,
-            'Student details updated successfully.'
-        )
-
+            'Progress submitted for verification.'
+            )
         return redirect(
-            'student_detail',
-            pk=updated_student.pk
-        )
-
-    return render(
-        request,
-        'core/form.html',
-        {
-            'form': form,
-            'title': f'Edit Student - {student.name}'
-        }
-    )
+            'student_scorecard'
+            )
+        return render(
+            request,
+            'core/form.html',
+            {
+                'form': form,
+                'title': f'Edit Student - {student.name}'
+                }
+                )
 
 @login_required
 def departments(request):

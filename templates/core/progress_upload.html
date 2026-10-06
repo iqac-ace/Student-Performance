@@ -69,7 +69,160 @@
                             Performance Parameter
                         </label>
 
-                        {{ form.parameter }}
+                        <label class="form-label fw-semibold">
+    Performance Parameter
+</label>
+
+<select
+    name="parameter"
+    id="id_parameter"
+    class="form-select"
+    required
+>
+
+    <option value="">
+        -------- Select Parameter --------
+    </option>
+
+    {% for parameter in parameters %}
+
+    <option
+        value="{{ parameter.id }}"
+        data-code="{{ parameter.code }}"
+    >
+
+        {{ parameter.order }}.
+        {{ parameter.name }}
+        — Maximum {{ parameter.max_points }} Points
+
+    </option>
+
+    {% endfor %}
+
+</select>
+<div
+    id="subtopicSection"
+    class="mt-4"
+    style="display:none;"
+>
+
+    <label class="form-label fw-semibold">
+
+        Sub-Parameter / Achievement
+
+    </label>
+
+    <select
+        name="subtopic"
+        id="id_subtopic"
+        class="form-select"
+        required
+    >
+
+        <option value="">
+            -------- Select Achievement --------
+        </option>
+
+    </select>
+
+</div>
+<div
+    id="requirementSection"
+    class="card mt-4 border-primary"
+    style="display:none;"
+>
+
+    <div class="card-body">
+
+        <h5>
+            Required Details
+        </h5>
+
+        <div
+            id="pointsDisplay"
+            class="alert alert-info py-2"
+        >
+        </div>
+
+        <div id="requirementsList">
+        </div>
+
+
+        <div
+            id="dynamicFields"
+            class="mt-3"
+        >
+
+            <div
+                class="mb-3"
+                id="detail1Group"
+            >
+
+                <label
+                    id="detail1Label"
+                    class="form-label"
+                >
+                    Detail 1
+                </label>
+
+                <input
+                    type="text"
+                    name="detail_1"
+                    id="id_detail_1"
+                    class="form-control"
+                >
+
+            </div>
+
+
+            <div
+                class="mb-3"
+                id="detail2Group"
+            >
+
+                <label
+                    id="detail2Label"
+                    class="form-label"
+                >
+                    Detail 2
+                </label>
+
+                <input
+                    type="text"
+                    name="detail_2"
+                    id="id_detail_2"
+                    class="form-control"
+                >
+
+            </div>
+
+
+            <div
+                class="mb-3"
+                id="detail3Group"
+            >
+
+                <label
+                    id="detail3Label"
+                    class="form-label"
+                >
+                    Detail 3
+                </label>
+
+                <input
+                    type="text"
+                    name="detail_3"
+                    id="id_detail_3"
+                    class="form-control"
+                >
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
 
                     </div>
 
@@ -642,6 +795,299 @@ document.addEventListener(
 
         updateParameterSection();
 
+    }
+);
+
+</script>
+<script>
+
+const RULES =
+    JSON.parse(
+        '{{ rules_json|escapejs }}'
+    );
+
+
+const parameterSelect =
+    document.getElementById(
+        'id_parameter'
+    );
+
+const subtopicSelect =
+    document.getElementById(
+        'id_subtopic'
+    );
+
+const subtopicSection =
+    document.getElementById(
+        'subtopicSection'
+    );
+
+const requirementSection =
+    document.getElementById(
+        'requirementSection'
+    );
+
+const requirementsList =
+    document.getElementById(
+        'requirementsList'
+    );
+
+const pointsDisplay =
+    document.getElementById(
+        'pointsDisplay'
+    );
+
+
+const fieldGroups = [
+
+    document.getElementById(
+        'detail1Group'
+    ),
+
+    document.getElementById(
+        'detail2Group'
+    ),
+
+    document.getElementById(
+        'detail3Group'
+    )
+
+];
+
+
+const fieldLabels = [
+
+    document.getElementById(
+        'detail1Label'
+    ),
+
+    document.getElementById(
+        'detail2Label'
+    ),
+
+    document.getElementById(
+        'detail3Label'
+    )
+
+];
+
+
+const fieldInputs = [
+
+    document.getElementById(
+        'id_detail_1'
+    ),
+
+    document.getElementById(
+        'id_detail_2'
+    ),
+
+    document.getElementById(
+        'id_detail_3'
+    )
+
+];
+
+
+let selectedParameterCode = null;
+
+
+parameterSelect.addEventListener(
+    'change',
+    function () {
+
+        const option =
+            this.options[
+                this.selectedIndex
+            ];
+
+        selectedParameterCode =
+            option.dataset.code;
+
+
+        subtopicSelect.innerHTML =
+            '<option value="">' +
+            '-------- Select Achievement --------' +
+            '</option>';
+
+
+        requirementSection.style.display =
+            'none';
+
+
+        if (
+            !selectedParameterCode ||
+            !RULES[
+                selectedParameterCode
+            ]
+        ) {
+
+            subtopicSection.style.display =
+                'none';
+
+            return;
+        }
+
+
+        const rule =
+            RULES[
+                selectedParameterCode
+            ];
+
+
+        Object.entries(
+            rule.subtopics
+        ).forEach(
+            ([key, data]) => {
+
+                const newOption =
+                    document.createElement(
+                        'option'
+                    );
+
+                newOption.value = key;
+
+                newOption.textContent =
+                    data.label +
+                    ' — ' +
+                    data.points +
+                    '/' +
+                    rule.max_points +
+                    ' Points';
+
+                subtopicSelect.appendChild(
+                    newOption
+                );
+            }
+        );
+
+
+        subtopicSection.style.display =
+            'block';
+    }
+);
+
+
+subtopicSelect.addEventListener(
+    'change',
+    function () {
+
+        if (
+            !selectedParameterCode ||
+            !this.value
+        ) {
+
+            requirementSection.style.display =
+                'none';
+
+            return;
+        }
+
+
+        const parameterRule =
+            RULES[
+                selectedParameterCode
+            ];
+
+        const subRule =
+            parameterRule
+                .subtopics[
+                    this.value
+                ];
+
+
+        pointsDisplay.innerHTML =
+
+            '<strong>Maximum Parameter Weight:</strong> ' +
+            parameterRule.max_points +
+            ' Points' +
+
+            '<br>' +
+
+            '<strong>Score for this Achievement:</strong> ' +
+            subRule.points +
+            ' Points';
+
+
+        requirementsList.innerHTML =
+            '<strong>Information Required:</strong>';
+
+
+        const ul =
+            document.createElement(
+                'ul'
+            );
+
+
+        subRule.requirements.forEach(
+            requirement => {
+
+                const li =
+                    document.createElement(
+                        'li'
+                    );
+
+                li.textContent =
+                    requirement;
+
+                ul.appendChild(li);
+            }
+        );
+
+
+        requirementsList.appendChild(
+            ul
+        );
+
+
+        fieldGroups.forEach(
+            group => {
+
+                group.style.display =
+                    'none';
+            }
+        );
+
+
+        fieldInputs.forEach(
+            input => {
+
+                input.required =
+                    false;
+
+                input.value = '';
+            }
+        );
+
+
+        subRule.requirements
+            .slice(0, 3)
+            .forEach(
+                (
+                    requirement,
+                    index
+                ) => {
+
+                    fieldGroups[
+                        index
+                    ].style.display =
+                        'block';
+
+                    fieldLabels[
+                        index
+                    ].textContent =
+                        requirement;
+
+                    fieldInputs[
+                        index
+                    ].required =
+                        true;
+                }
+            );
+
+
+        requirementSection.style.display =
+            'block';
     }
 );
 
