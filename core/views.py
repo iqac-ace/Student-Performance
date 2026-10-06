@@ -1358,13 +1358,21 @@ def student_detail(request, pk):
     request.user
     )
     if current_role == 'STUDENT':
-        if s.user_id != request.user.id:
-            return HttpResponseForbidden(
-            'You cannot view another '
-            'student profile.'
-        )
-        elif current_role == 'HOD':
-            if (
+        profile_student = getattr(
+            request.user.profile,
+            'student',
+            None
+            )
+
+    if (
+        not profile_student
+        or profile_student.id != s.id
+    ):
+        return HttpResponseForbidden(
+            'You cannot view another student profile.'
+            )
+    elif current_role == 'HOD':
+        if (
                 s.department_id
                 != request.user.profile.department_id
                 ):
@@ -1372,9 +1380,9 @@ def student_detail(request, pk):
             'You cannot view students '
             'from another department.'
         )
-            elif current_role == 'IQAC':
+        elif current_role == 'IQAC':
                 pass
-            else:
+        else:
                 return HttpResponseForbidden(
                     'Not authorized.'
                     )
