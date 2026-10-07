@@ -1659,6 +1659,7 @@ def student_edit(request, pk):
         )
         progress.student = student
         progress.status = 'PENDING'
+        progress.save()
         progress.subtopic = (
             request.POST.get(
                 'subtopic',
@@ -2846,43 +2847,13 @@ def approvals(request):
     return render(request,'core/approvals.html',{'activities':activities.select_related('student','parameter'),'semesters':semesters.select_related('student'),'marks':marks.select_related('student','subject'),'role':r})
 
 @login_required
-def progress_approvals(request):
+def progress_verification(request):
 
-    current_role = portal_role(
-        request.user
-    )
+    current_role = portal_role(request.user)
 
-
-    if current_role not in [
-        'HOD',
-        'IQAC'
-    ]:
-
-        return HttpResponseForbidden(
-            'Only HOD and IQAC can '
-            'verify student progress.'
-        )
-
-
-    submissions = (
-        ProgressSubmission.objects
-        .filter(
-            status='PENDING'
-        )
-        .select_related(
-            'student',
-            'student__department',
-            'parameter'
-        )
-        .order_by(
-            'student__department__code',
-            'student__register_number',
-            'created_at'
-        )
-    )
-
-
-    # HOD sees only their department
+    # -----------------------------
+    # HOD
+    # -----------------------------
     if current_role == 'HOD':
 
         department = getattr(
@@ -2891,58 +2862,61 @@ def progress_approvals(request):
             None
         )
 
-
         if not department:
-
             return HttpResponseForbidden(
-                'HOD department '
-                'is not configured.'
+                'No department is assigned to this HOD account.'
             )
-
 
         submissions = (
-            submissions.filter(
-                student__department=
-                    department
+            ProgressSubmission.objects
+            .filter(
+                status='PENDING',
+                student__department_id=department.id
             )
+            .select_related(
+                'student',
+                'student__department',
+                'parameter'
+            )
+            .order_by('-created_at')
         )
 
 
-    items = []
+    # -----------------------------
+    # IQAC
+    # -----------------------------
+    elif current_role == 'IQAC':
 
-
-    for submission in submissions:
-
-        calculated_points = min(
-
-            calculate_submission_points(
-                submission
-            ),
-
-            submission.parameter.max_points
+        submissions = (
+            ProgressSubmission.objects
+            .filter(
+                status__in=[
+                    'PENDING',
+                    'HOD_APPROVED'
+                ]
+            )
+            .select_related(
+                'student',
+                'student__department',
+                'parameter'
+            )
+            .order_by('-created_at')
         )
 
 
-        items.append(
-            {
-                'submission':
-                    submission,
+    else:
 
-                'calculated_points':
-                    calculated_points,
-            }
+        return HttpResponseForbidden(
+            'You are not authorized to verify student progress.'
         )
 
 
     return render(
         request,
-        'core/progress_approvals.html',
+        'core/progress_verification.html',
         {
-            'items':
-                items,
-
-            'current_role':
-                current_role,
+            'submissions': submissions,
+            'portal_role': current_role,
         }
     )
 @login_required

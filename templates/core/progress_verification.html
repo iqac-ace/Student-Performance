@@ -1,0 +1,122 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+
+<div class="container-fluid">
+
+    <h2>Student Progress Verification</h2>
+
+    <p class="text-muted">
+        Verify submitted student progress and supporting documents.
+    </p>
+
+    <div class="card border-0 shadow-sm">
+
+        <div class="card-body">
+
+            <div class="table-responsive">
+
+                <table class="table align-middle">
+
+                    <thead>
+
+                        <tr>
+                            <th>Student</th>
+                            <th>Parameter</th>
+                            <th>Sub-Parameter</th>
+                            <th>Academic Year</th>
+                            <th>Details</th>
+                            <th>Evidence</th>
+                            <th>Status</th>
+                        </tr>
+
+                    </thead>
+
+                    <tbody>
+
+                    {% for submission in submissions %}
+
+                        <tr>
+
+                            <td>
+                                <strong>
+                                    {{ submission.student.name }}
+                                </strong>
+
+                                <br>
+
+                                <small class="text-muted">
+                                    {{ submission.student.register_number }}
+                                </small>
+                            </td>
+
+                            <td>
+                                {{ submission.parameter.name }}
+                            </td>
+
+                            <td>
+                                {{ submission.subtopic|default:"-" }}
+                            </td>
+
+                            <td>
+                                {{ submission.academic_year }}
+                            </td>
+
+                            <td>
+                                {{ submission.details|default:"-" }}
+                            </td>
+
+                            <td>
+
+                                {% if submission.evidence %}
+
+                                    <a
+                                        href="{{ submission.evidence.url }}"
+                                        target="_blank"
+                                        class="btn btn-sm btn-outline-primary"
+                                    >
+                                        View File
+                                    </a>
+
+                                {% else %}
+
+                                    No file
+
+                                {% endif %}
+
+                            </td>
+
+                            <td>
+                                {{ submission.get_status_display }}
+                            </td>
+
+                        </tr>
+
+                    {% empty %}
+
+                        <tr>
+
+                            <td
+                                colspan="7"
+                                class="text-center text-muted py-4"
+                            >
+                                No submissions waiting for verification.
+                            </td>
+
+                        </tr>
+
+                    {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

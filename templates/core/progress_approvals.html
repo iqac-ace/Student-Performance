@@ -140,17 +140,74 @@
 
 
 
+    <tbody>
+
+{% for submission in submissions %}
+
+<tr>
+
+    <td>
+        {{ submission.student.name }}
+        <br>
+        <small>
+            {{ submission.student.register_number }}
+        </small>
+    </td>
+
+    <td>
+        {{ submission.parameter.name }}
+        <br>
+        <small>
+            {{ submission.subtopic }}
+        </small>
+    </td>
+
+    <td>
+        {{ submission.academic_year }}
+    </td>
+
+    <td>
+        {{ submission.details }}
+    </td>
+
     <td>
 
+        {% if submission.evidence %}
+
         <a
-            href="{{ s.evidence.url }}"
+            href="{{ submission.evidence.url }}"
             target="_blank"
             class="btn btn-sm btn-outline-primary"
         >
             View Evidence
         </a>
 
+        {% else %}
+
+        No file
+
+        {% endif %}
+
     </td>
+
+    </tr>
+
+     {% empty %}
+
+    <tr>
+
+       <td
+         colspan="6"
+         class="text-center py-4"
+         >
+           No submissions waiting for verification.
+       </td>
+
+    </tr>
+
+     {% endfor %}
+
+</tbody>
 
 
     <td>
