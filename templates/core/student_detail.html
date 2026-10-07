@@ -132,7 +132,62 @@
     </div>
 </div>
 
+<hr class="my-4">
 
+<h4>My Progress Submissions</h4>
+
+{% for submission in submissions %}
+
+<div class="card mb-3">
+
+    <div class="card-body">
+
+        <strong>
+            {{ submission.parameter.name }}
+        </strong>
+
+        <div>
+            {{ submission.subtopic }}
+        </div>
+
+        <div class="mt-2">
+            Status:
+            <strong>{{ submission.get_status_display }}</strong>
+        </div>
+
+        {% if submission.status == 'PENDING' %}
+
+        <form
+            method="post"
+            action="{% url 'delete_progress_submission' submission.id %}"
+            class="mt-2"
+            onsubmit="return confirm('Delete this progress submission?');"
+        >
+
+            {% csrf_token %}
+
+            <button
+                type="submit"
+                class="btn btn-sm btn-outline-danger"
+            >
+                Delete
+            </button>
+
+        </form>
+
+        {% endif %}
+
+    </div>
+
+</div>
+
+{% empty %}
+
+<p class="text-muted">
+    No progress submissions yet.
+</p>
+
+{% endfor %}
 
 
 

@@ -2946,83 +2946,146 @@ def progress_approvals(request):
         }
     )
 @login_required
-def delete_progress_submission(
-    request,
-    pk
-):
+def delete_progress_submission(request, pk):
 
-    if portal_role(
-        request.user
-    ) != 'STUDENT':
-
+    if request.method != "POST":
         return HttpResponseForbidden(
-            'Student access only.'
+            "Deletion must be submitted using POST."
         )
-
 
     submission = get_object_or_404(
         ProgressSubmission,
-        pk=pk,
-        student__user=request.user
+        pk=pk
     )
 
+    current_role = role(request.user)
 
-    # Only pending submission can be deleted
-    if submission.status != 'PENDING':
+    # ---------------------------------
+    # STUDENT
+    # ---------------------------------
+    if current_role == "STUDENT":
 
-        messages.error(
-            request,
-            'Verified or rejected records '
-            'cannot be deleted here.'
+        student = getattr(
+            request.user.profile,
+            "student",
+            None
         )
 
-        return redirect(
-            'student_scorecard'
+        if not student or submission.student_id != student.id:
+            return HttpResponseForbidden(
+                "You cannot delete another student's submission."
+            )
+
+        if submission.status != "PENDING":
+            messages.error(
+                request,
+                "Only pending submissions can be deleted."
+            )
+
+            return redirect(
+                "student_detail",
+                pk=student.id
+            )
+
+        # Delete only within 24 hours
+        delete_limit = (
+            submission.created_at
+            + timedelta(hours=24)
         )
 
+        if timezone.now() > delete_limit:
 
-    # Only within first 24 hours
-    expiry_time = (
-        submission.created_at
-        + timedelta(hours=24)
-    )
+            messages.error(
+                request,
+                "This submission can no longer be deleted because "
+                "the 24-hour deletion period has expired."
+            )
 
-
-    if timezone.now() > expiry_time:
-
-        messages.error(
-            request,
-            'The 24-hour deletion period '
-            'has expired.'
-        )
-
-        return redirect(
-            'student_scorecard'
-        )
-
-
-    if request.method == 'POST':
-
-        # Delete actual uploaded file
-        if submission.evidence:
-
-            submission.evidence.delete(
-                save=False
+            return redirect(
+                "student_detail",
+                pk=student.id
             )
 
 
-        submission.delete()
+    # ---------------------------------
+    # HOD
+    # ---------------------------------
+    elif current_role == "HOD":
+
+        hod_department_id = (
+            request.user.profile.department_id
+        )
+
+        if (
+            submission.student.department_id
+            != hod_department_id
+        ):
+            return HttpResponseForbidden(
+                "You cannot delete another department's submission."
+            )
+
+        if submission.status == "IQAC_APPROVED":
+
+            messages.error(
+                request,
+                "IQAC-approved records cannot be deleted by HOD."
+            )
+
+            return redirect(
+                "progress_approvals"
+            )
 
 
-        messages.success(
-            request,
-            'Submission and evidence '
-            'deleted successfully.'
+    # ---------------------------------
+    # IQAC
+    # ---------------------------------
+    elif current_role == "IQAC":
+
+        # IQAC can delete any submission
+        pass
+
+
+    else:
+
+        return HttpResponseForbidden(
+            "You are not authorized to delete this submission."
         )
 
 
+    # ---------------------------------
+    # DELETE UPLOADED FILE
+    # ---------------------------------
+
+    if submission.evidence:
+
+        try:
+            submission.evidence.delete(
+                save=False
+            )
+        except Exception:
+            pass
+
+
+    student_id = submission.student_id
+
+    submission.delete()
+
+
+    messages.success(
+        request,
+        "Progress submission deleted successfully."
+    )
+
+
+    if current_role == "STUDENT":
+
+        return redirect(
+            "student_detail",
+            pk=student_id
+        )
+
     return redirect(
-        'student_scorecard'
+        "progress_approvals"
     )
 @login_required
 def verify_progress(

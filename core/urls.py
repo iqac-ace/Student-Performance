@@ -28,5 +28,5 @@ urlpatterns=[
     path('my-scorecard/',views.student_scorecard_view,name='student_scorecard'),
     path('student-score-overview/',views.student_score_overview,name='student_score_overview'),
     path('iqac/score-overview/',views.iqac_score_overview,name='iqac_score_overview'),
-    path('student/progress/<int:pk>/delete/',views.delete_progress_submission,name='delete_progress_submission'),
+    path("progress/<int:pk>/delete/",views.delete_progress_submission,name="delete_progress_submission"),
 ]

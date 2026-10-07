@@ -90,6 +90,54 @@
         {% endfor %}
 
     </td>
+    <td>
+
+    {% if portal_role == 'IQAC' %}
+
+        <form
+            method="post"
+            action="{% url 'delete_progress_submission' submission.id %}"
+            style="display:inline;"
+            onsubmit="return confirm('Permanently delete this submission?');"
+        >
+
+            {% csrf_token %}
+
+            <button
+                type="submit"
+                class="btn btn-sm btn-danger"
+            >
+                Delete
+            </button>
+
+        </form>
+
+
+    {% elif portal_role == 'HOD' and submission.status != 'IQAC_APPROVED' %}
+
+        <form
+            method="post"
+            action="{% url 'delete_progress_submission' submission.id %}"
+            style="display:inline;"
+            onsubmit="return confirm('Delete this submission?');"
+        >
+
+            {% csrf_token %}
+
+            <button
+                type="submit"
+                class="btn btn-sm btn-outline-danger"
+            >
+                Delete
+            </button>
+
+        </form>
+
+    {% endif %}
+
+    </td>
+    
+
 
 
     <td>
